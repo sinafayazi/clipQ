@@ -1,0 +1,139 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #111;
+  color: #eee;
+  font: 14px/1.4 system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+a {
+  color: #53fc18;
+}
+
+.error {
+  color: #ff5c5c;
+  margin: 8px 12px;
+}
+
+.center {
+  display: grid;
+  place-items: center;
+  height: 100%;
+}
+
+.login {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #333;
+}
+
+main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 360px;
+}
+
+section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  min-height: 0;
+}
+
+.player {
+  flex: 1;
+  min-height: 0;
+  background: #000;
+  display: flex;
+}
+
+.player > iframe,
+.player > video,
+.player > .yt-host,
+.player .yt-host iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.empty,
+.player-fallback {
+  margin: auto;
+  text-align: center;
+}
+
+aside {
+  border-left: 1px solid #333;
+  padding: 12px;
+  overflow-y: auto;
+}
+
+ol {
+  padding-left: 20px;
+}
+
+li {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.item-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 800px) {
+  main {
+    grid-template-columns: 1fr;
+  }
+  .player {
+    flex: none;
+    aspect-ratio: 16 / 9;
+  }
+  aside {
+    border-left: 0;
+    border-top: 1px solid #333;
+  }
+}
