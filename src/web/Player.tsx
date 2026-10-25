@@ -43,8 +43,8 @@ function Fallback({ item }: { item: QueueItem }) {
   return (
     <div className="player-fallback">
       <p>This clip can't be embedded.</p>
-      <a href={item.url} target="_blank" rel="noreferrer">
-        Open it in a new tab
+      <a className="btn btn-primary" href={item.url} target="_blank" rel="noreferrer">
+        Open clip in a new tab
       </a>
     </div>
   );

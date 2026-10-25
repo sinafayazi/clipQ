@@ -3,6 +3,7 @@ import type { WebSocket } from "ws";
 import { z } from "zod";
 import type { ServerMessage } from "../shared/types.js";
 import { config } from "./config.js";
+import { originAllowed } from "./origin.js";
 import { lookupChannel } from "./kick/api.js";
 import type { KickChat } from "./kick/chat.js";
 import { authorizeUrl, createPkce, exchangeCode, fetchMe } from "./kick/oauth.js";
@@ -23,7 +24,7 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions }:
   app.addHook("onRequest", async (req, reply) => {
     if (req.method === "GET" || req.method === "HEAD") return;
     const origin = req.headers.origin;
-    if (origin && origin !== publicOrigin) return reply.code(403).send({ error: "bad origin" });
+    if (origin && !originAllowed(origin, publicOrigin)) return reply.code(403).send({ error: "bad origin" });
   });
 
   /** Log a channel in: save it, join its chat, start a session. */
