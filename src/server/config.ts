@@ -6,6 +6,11 @@ function env(name: string, fallback?: string): string {
 }
 
 const publicUrl = env("PUBLIC_URL", "http://localhost:5173").replace(/\/+$/, "");
+if (!/^https?:\/\/[^/\s]+$/.test(publicUrl)) {
+  throw new Error(
+    `PUBLIC_URL must be the site's address, like https://clipq-xxxx.onrender.com (no path). Got: "${publicUrl.slice(0, 8)}…"`,
+  );
+}
 
 export const config = {
   port: Number(env("PORT", "3000")),
