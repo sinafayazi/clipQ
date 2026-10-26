@@ -1,8 +1,6 @@
 import cookie from "@fastify/cookie";
-import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
 import Fastify from "fastify";
-import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bridgeChat } from "./bridge.js";
@@ -12,6 +10,7 @@ import { openDb } from "./db.js";
 import { KickChat } from "./kick/chat.js";
 import { QueueService } from "./queue/service.js";
 import { registerRoutes } from "./routes.js";
+import { registerSite } from "./site.js";
 import { Sessions } from "./sessions.js";
 import { TursoSync } from "./sync.js";
 import { createClient } from "@libsql/client";
@@ -37,17 +36,8 @@ const chat = new KickChat({ ...config.pusher, log: { info: (m) => app.log.info(m
 bridgeChat(chat, queues, app.log);
 registerRoutes(app, { queues, chat, sessions });
 
-// The built dashboard. In dev, Vite serves it and proxies the API here.
-const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../web");
-if (existsSync(webRoot)) {
-  await app.register(fastifyStatic, { root: webRoot, wildcard: false });
-  app.setNotFoundHandler((req, reply) => {
-    if (req.method !== "GET" || req.url.startsWith("/api/") || req.url.startsWith("/auth/")) {
-      return reply.code(404).send({ error: "not found" });
-    }
-    return reply.sendFile("index.html");
-  });
-}
+// The built site. In dev, Vite serves it and proxies the API here.
+await registerSite(app, join(dirname(fileURLToPath(import.meta.url)), "../web"), sessions);
 
 app.get("/healthz", async () => ({ ok: true, chat: chat.isConnected }));
 

@@ -66,10 +66,13 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
             <span className="switch-ui" />
             Queue open
           </label>
+          <a className="btn btn-ghost" href="https://nowpayments.io/donation/sina" target="_blank" rel="noopener">
+            ♥ Donate
+          </a>
           <button
             type="button"
             className="btn btn-ghost icon-start"
-            onClick={() => api.logout().finally(() => (location.href = "/"))}
+            onClick={() => api.logout().finally(() => (location.href = "/app/"))}
           >
             <LogoutIcon size={18} stroke={2} />
             Log out

@@ -1,21 +1,295 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>clipQ: clip queue for Kick streamers</title>
+    <meta
+      name="description"
+      content="Free clip queue for Kick. Viewers post Kick, YouTube, Twitch or TikTok links in your chat, and you watch them on stream, in order, with spam limits and mod commands built in."
+    />
+    <link rel="canonical" href="__SITE_URL__/" />
+    <link rel="alternate" hreflang="en" href="__SITE_URL__/" />
+    <link rel="alternate" hreflang="fa" href="__SITE_URL__/fa/" />
+    <link rel="alternate" hreflang="x-default" href="__SITE_URL__/" />
     <meta name="theme-color" content="#0a0a0a" />
-    <title>clipQ</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="clipQ" />
+    <meta property="og:title" content="clipQ: clip queue for Kick streamers" />
+    <meta property="og:description" content="Viewers post clip links in your Kick chat. You watch them on stream, in order. Free." />
+    <meta property="og:url" content="__SITE_URL__/" />
+    <meta property="og:image" content="__SITE_URL__/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="clipQ: the clip queue for Kick streamers" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="fa_IR" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="clipQ: clip queue for Kick streamers" />
+    <meta name="twitter:description" content="Viewers post clip links in your Kick chat. You watch them on stream, in order. Free." />
+    <meta name="twitter:image" content="__SITE_URL__/og.png" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Source+Sans+3:wght@400;600;700&display=swap"
     />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230a0a0a'/><path d='M12 9l12 7-12 7z' fill='%23e1182f'/></svg>" />
+    <link rel="stylesheet" href="./landing.css" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "clipQ",
+        "url": "__SITE_URL__/",
+        "description": "Clip queue for Kick streamers: viewers post clip links in chat and the streamer watches them in order.",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Any (web browser)",
+        "inLanguage": ["en", "fa"],
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is clipQ free?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. clipQ is free to use. Donations help pay for hosting." }
+          },
+          {
+            "@type": "Question",
+            "name": "Which links does clipQ accept?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Kick clips, YouTube videos and Shorts, Twitch clips, TikTok, X (Twitter) posts and Streamable." }
+          },
+          {
+            "@type": "Question",
+            "name": "Does the dashboard have to stay open to collect clips?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. clipQ reads your Kick chat on its server, so links are collected while the queue is open even if the dashboard tab is closed." }
+          },
+          {
+            "@type": "Question",
+            "name": "How does clipQ stop spam?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Each viewer can only have a few clips waiting, the same clip can't be added twice, clips already played are rejected, and clips are removed when a moderator deletes the message or bans the viewer." }
+          },
+          {
+            "@type": "Question",
+            "name": "Is it safe to log in with Kick?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. clipQ uses Kick's official login and only asks to read your profile and channel. It never sees your password and can't post or change anything on your account." }
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="./main.tsx"></script>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="wrap">
+        <a class="logo" href="/"><span class="tally" aria-hidden="true"></span>clipQ</a>
+        <nav class="nav" aria-label="Sections">
+          <a href="#how">How it works</a>
+          <a href="#features">Features</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+        <a class="lang" href="/fa/" hreflang="fa" lang="fa">فارسی</a>
+        <a class="btn" href="/app/">Open dashboard</a>
+      </div>
+    </header>
+
+    <main id="main">
+      <div class="hero">
+        <div class="wrap">
+          <div>
+            <p class="eyebrow"><span class="tally" aria-hidden="true"></span>For Kick streamers</p>
+            <h1>Your chat picks the clips. <em>You hit play.</em></h1>
+            <p class="lede">
+              clipQ turns clip links posted in your Kick chat into a tidy queue. Watch them on stream one after another, skip the
+              bad ones, and let your mods keep it clean.
+            </p>
+            <div class="cta-row">
+              <a class="btn btn-primary btn-lg" href="/app/">Log in with Kick, it's free</a>
+              <a class="btn btn-lg" href="#how">See how it works</a>
+            </div>
+            <p class="fineprint">No download, no bot to add. Log in once and clipQ starts listening to your chat.</p>
+          </div>
+
+          <div class="mock" role="img" aria-label="Preview of the clipQ dashboard: a clip playing and three clips waiting in the queue">
+            <div class="mock-bar"><span class="tally" aria-hidden="true"></span>clipQ <span class="live">Chat connected</span></div>
+            <div class="mock-player">
+              <p>Insane clutch in the final round<small>Kick · requested by Radin_SD · 0:41</small></p>
+            </div>
+            <ol class="mock-list">
+              <li><span class="thumb"></span><div><b>1. Funniest fail of the week</b><span>YouTube · LowGraphic</span></div></li>
+              <li><span class="thumb"></span><div><b>2. Chat goes wild</b><span>Twitch · Amir_1446</span></div></li>
+              <li><span class="thumb"></span><div><b>3. Cat vs printer</b><span>TikTok · Siiinfa</span></div></li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <section id="how">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>How it works</h2>
+            <p>Set it up once in about a minute. After that it runs by itself.</p>
+          </div>
+          <ol class="steps">
+            <li>
+              <h3>Log in with Kick</h3>
+              <p>Use your Kick account. clipQ finds your channel and connects to its chat.</p>
+            </li>
+            <li>
+              <h3>Open the queue</h3>
+              <p>Flip the switch, or have a mod type <code>!cq open</code>. Now viewers can post links in chat.</p>
+            </li>
+            <li>
+              <h3>Watch on stream</h3>
+              <p>Clips line up in order. Press Next, or let them play one after another automatically.</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section id="features">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Built for live chat</h2>
+            <p>Chat is fast and messy. clipQ keeps the queue fair and the stream safe.</p>
+          </div>
+          <div class="features">
+            <article>
+              <h3>Fair order</h3>
+              <p>Clips play in the order they were posted, even when some links take longer to load.</p>
+            </article>
+            <article>
+              <h3>Spam limits</h3>
+              <p>Each viewer can only have a few clips waiting, and the same clip can't be added twice.</p>
+            </article>
+            <article>
+              <h3>Mods stay in control</h3>
+              <p>If a mod deletes a message or bans someone, their clips disappear from the queue right away.</p>
+            </article>
+            <article>
+              <h3>Plays by itself</h3>
+              <p>Kick, YouTube and TikTok clips go to the next one automatically when they end.</p>
+            </article>
+            <article>
+              <h3>Always listening</h3>
+              <p>clipQ reads your chat on its server, so links are collected even if the dashboard isn't open.</p>
+            </article>
+            <article>
+              <h3>Free</h3>
+              <p>No plans, no limits on channels. Kept running by donations.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="sources">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Every clip your chat posts</h2>
+            <p>Viewers paste links the way they always do, with or without <code>https://</code>.</p>
+          </div>
+          <ul class="sources">
+            <li>Kick clips</li>
+            <li>YouTube &amp; Shorts</li>
+            <li>Twitch clips</li>
+            <li>TikTok</li>
+            <li>X (Twitter)</li>
+            <li>Streamable</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="commands">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Chat commands for you and your mods</h2>
+            <p>Run the queue without leaving chat.</p>
+          </div>
+          <dl class="commands">
+            <dt><code>!cq open</code></dt>
+            <dd>Start taking clips from chat</dd>
+            <dt><code>!cq close</code></dt>
+            <dd>Stop taking clips</dd>
+            <dt><code>!cq next</code></dt>
+            <dd>Play the next clip</dd>
+            <dt><code>!cq skip</code></dt>
+            <dd>Skip the current clip</dd>
+            <dt><code>!cq prev</code></dt>
+            <dd>Replay the previous clip</dd>
+            <dt><code>!cq clear</code></dt>
+            <dd>Empty the queue</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="faq">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Questions</h2>
+          </div>
+          <div class="faq">
+            <details>
+              <summary>Is clipQ free?</summary>
+              <p>Yes. clipQ is free to use. Donations help pay for hosting.</p>
+            </details>
+            <details>
+              <summary>Which links does clipQ accept?</summary>
+              <p>Kick clips, YouTube videos and Shorts, Twitch clips, TikTok, X (Twitter) posts and Streamable.</p>
+            </details>
+            <details>
+              <summary>Does the dashboard have to stay open to collect clips?</summary>
+              <p>
+                No. clipQ reads your Kick chat on its server, so links are collected while the queue is open even if the dashboard
+                tab is closed.
+              </p>
+            </details>
+            <details>
+              <summary>How does clipQ stop spam?</summary>
+              <p>
+                Each viewer can only have a few clips waiting, the same clip can't be added twice, clips already played are
+                rejected, and clips are removed when a moderator deletes the message or bans the viewer.
+              </p>
+            </details>
+            <details>
+              <summary>Is it safe to log in with Kick?</summary>
+              <p>
+                Yes. clipQ uses Kick's official login and only asks to read your profile and channel. It never sees your password
+                and can't post or change anything on your account.
+              </p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="final">
+        <div class="wrap">
+          <h2>Let your chat run the clips tonight</h2>
+          <p>Log in with Kick and open the queue. It takes about a minute.</p>
+          <div class="cta-row">
+            <a class="btn btn-primary btn-lg" href="/app/">Start with clipQ</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <a class="logo" href="/"><span class="tally" aria-hidden="true"></span>clipQ</a>
+        <nav aria-label="Footer">
+          <a class="donate" href="https://nowpayments.io/donation/sina" target="_blank" rel="noopener">♥ Support clipQ (donate)</a>
+          <a href="https://github.com/sinafayazi/clipQ" target="_blank" rel="noopener">Source code</a>
+          <a href="/fa/" hreflang="fa" lang="fa">فارسی</a>
+        </nav>
+      </div>
+    </footer>
   </body>
 </html>

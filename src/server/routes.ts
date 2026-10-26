@@ -53,7 +53,7 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions }:
   });
 
   app.get<{ Querystring: { code?: string; state?: string; error?: string } }>("/auth/callback", async (req, reply) => {
-    const fail = (why: string) => reply.redirect(`/?error=${encodeURIComponent(why)}`);
+    const fail = (why: string) => reply.redirect(`/app/?error=${encodeURIComponent(why)}`);
     if (!config.oauth) return fail("Kick login is not configured");
     const [state, verifier] = (req.cookies[PKCE_COOKIE] ?? "").split(".");
     reply.clearCookie(PKCE_COOKIE, { path: "/auth" });
@@ -73,7 +73,7 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions }:
       }
       if (channel.id !== me.userId) return fail("Channel does not belong to this account");
       login(reply, channel);
-      return reply.redirect("/");
+      return reply.redirect("/app/");
     } catch (err) {
       req.log.error({ err }, "oauth callback failed");
       return fail("Kick login failed");
@@ -88,9 +88,9 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions }:
       login(reply, await lookupChannel(slug));
     } catch (err) {
       req.log.error({ err }, "dev login failed");
-      return reply.redirect(`/?error=${encodeURIComponent(`Couldn't find channel "${slug}"`)}`);
+      return reply.redirect(`/app/?error=${encodeURIComponent(`Couldn't find channel "${slug}"`)}`);
     }
-    return reply.redirect("/");
+    return reply.redirect("/app/");
   });
 
   app.post("/auth/logout", async (req, reply) => {
