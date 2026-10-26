@@ -1,5 +1,5 @@
 import type Hls from "hls.js";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { QueueItem } from "../shared/types";
 
 interface Props {
@@ -12,7 +12,7 @@ interface Props {
 export function Player({ item, onEnded }: Props) {
   switch (item.provider) {
     case "kick":
-      return item.mediaUrl ? <HlsVideo src={item.mediaUrl} onEnded={onEnded} /> : <Fallback item={item} />;
+      return item.mediaUrl ? <HlsVideo src={item.mediaUrl} onEnded={onEnded} /> : <KickLookup item={item} onEnded={onEnded} />;
     case "youtube":
       return <YouTube id={item.clipId} start={item.start ?? 0} onEnded={onEnded} />;
     case "twitch":
@@ -48,6 +48,28 @@ function Fallback({ item }: { item: QueueItem }) {
       </a>
     </div>
   );
+}
+
+/**
+ * The server couldn't get this Kick clip's video URL (Kick's Cloudflare sometimes blocks hosting IPs).
+ * Kick's API allows browser requests, so ask from here instead.
+ */
+function KickLookup({ item, onEnded }: Props) {
+  const [src, setSrc] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`https://kick.com/api/v2/clips/${enc(item.clipId)}`, { headers: { accept: "application/json" } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => !cancelled && setSrc(j?.clip?.video_url ?? j?.clip?.clip_url ?? null))
+      .catch(() => !cancelled && setSrc(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [item.clipId]);
+
+  if (src === undefined) return <div className="player-fallback"><p>Loading clip…</p></div>;
+  return src ? <HlsVideo src={src} onEnded={onEnded} /> : <Fallback item={item} />;
 }
 
 function HlsVideo({ src, onEnded }: { src: string; onEnded: () => void }) {

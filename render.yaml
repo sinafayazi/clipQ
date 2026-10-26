@@ -1,0 +1,21 @@
+# Render Blueprint: free web service built from the Dockerfile. Data lives in Turso (see DEPLOY.md).
+services:
+  - type: web
+    name: clipq
+    runtime: docker
+    plan: free
+    region: frankfurt # keep it next to the Turso database region
+    healthCheckPath: /healthz
+    # Deploying restarts the app, so deploy by hand when nobody is streaming.
+    autoDeploy: false
+    envVars:
+      - key: PUBLIC_URL # https://<service-name>.onrender.com
+        sync: false
+      - key: KICK_CLIENT_ID
+        sync: false
+      - key: KICK_CLIENT_SECRET
+        sync: false
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false

@@ -51,7 +51,40 @@ const MIGRATIONS = [
   CREATE INDEX items_by_clip ON items (channel_id, queue, provider, clip_id);
   CREATE INDEX items_by_message ON items (channel_id, message_id);
   `,
+  // Change tracking for the Turso copy (see sync.ts). Every insert/update stamps the row with the
+  // next number from sync_clock; deleted sessions leave a tombstone. Existing rows start at 1 so
+  // they are pushed once.
+  `
+  ALTER TABLE channels ADD COLUMN rev INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE sessions ADD COLUMN rev INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE items ADD COLUMN rev INTEGER NOT NULL DEFAULT 1;
+
+  CREATE TABLE sync_clock (
+    id      INTEGER PRIMARY KEY CHECK (id = 1),
+    seq     INTEGER NOT NULL,   -- last rev handed out
+    pushed  INTEGER NOT NULL    -- every rev up to this is in Turso
+  );
+  INSERT INTO sync_clock VALUES (1, 1, 0);
+
+  CREATE TABLE sync_deletes (rev INTEGER NOT NULL, tbl TEXT NOT NULL, key TEXT NOT NULL);
+
+  ${revTriggers("channels")}
+  ${revTriggers("sessions")}
+  ${revTriggers("items")}
+
+  CREATE TRIGGER sessions_tombstone AFTER DELETE ON sessions BEGIN
+    UPDATE sync_clock SET seq = seq + 1;
+    INSERT INTO sync_deletes VALUES ((SELECT seq FROM sync_clock), 'sessions', OLD.id);
+  END;
+  `,
 ];
+
+function revTriggers(table: string) {
+  const stamp = `UPDATE sync_clock SET seq = seq + 1; UPDATE ${table} SET rev = (SELECT seq FROM sync_clock) WHERE rowid = NEW.rowid;`;
+  return `
+  CREATE TRIGGER ${table}_rev_ins AFTER INSERT ON ${table} BEGIN ${stamp} END;
+  CREATE TRIGGER ${table}_rev_upd AFTER UPDATE ON ${table} WHEN NEW.rev = OLD.rev BEGIN ${stamp} END;`;
+}
 
 export function openDb(path: string): Db {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });

@@ -1,4 +1,92 @@
-# Deploying clipQ on an Oracle Cloud Always Free VM
+# Deploying clipQ
+
+Two free ways to run clipQ:
+
+- **[Option A: Render + Turso + UptimeRobot](#option-a-render--turso--uptimerobot-no-card)**: needs no card. It's three free services working together.
+- **[Option B: Oracle Cloud Always Free VM](#option-b-oracle-cloud-always-free-vm)**: needs an international card. It's one real server and is the most robust option.
+
+---
+
+# Option A: Render + Turso + UptimeRobot (no card)
+
+| Service | Job | Free limits |
+|---|---|---|
+| **Render** | Runs clipQ and gives you `https://<name>.onrender.com` with HTTPS | 750 hours/month for all free services together. One service running all month uses ~744. |
+| **Turso** | Keeps the database. Render's free disk is wiped whenever the app restarts. | Far more than clipQ needs |
+| **UptimeRobot** | Opens clipQ every 5 minutes so Render never puts it to sleep | 50 monitors |
+
+How the data flows: clipQ works on a local SQLite file as before. When it starts, it copies everything from Turso, and every change is pushed back to Turso within about a second.
+
+Two things to know:
+
+- **Don't deploy while streaming.** A deploy restarts clipQ. The queue survives, but chat links posted during the ~1 minute switch can be missed. Auto-deploy is off, so nothing deploys unless you click it.
+- If Turso can't be reached when clipQ starts, clipQ refuses to start, and Render retries. This is deliberate: starting empty could overwrite your data.
+
+## A1. Create the Turso database
+
+1. Sign up at <https://turso.tech> with GitHub. No card needed.
+2. **Databases → Create Database.** Name: `clipq`. Location: **Frankfurt (aws-eu-central-1)**, the same region as the Render service.
+3. Open the database and copy its **URL**, which looks like `libsql://clipq-<you>.turso.io`.
+4. Click **Create Token** with read & write access, no expiry. Copy the token. It's shown only once.
+
+clipQ creates its tables in Turso by itself on first start.
+
+## A2. Create the Render service
+
+1. Sign up at <https://render.com> with GitHub. No card needed for free services.
+2. **New → Blueprint**, pick the `clipQ` repository. Render reads `render.yaml` and proposes a free web service named `clipq`.
+   - If the name `clipq` is taken, Render picks another. Your URL is whatever Render shows, such as `https://clipq-ab12.onrender.com`.
+   - If you'd rather not use a Blueprint, use **New → Web Service** → the repo, with **Language: Docker**, **Instance type: Free**, **Region: Frankfurt** and **Health check path: `/healthz`**. Turn **Auto-Deploy** off in Settings.
+3. Fill in the environment variables it asks for:
+
+| Key | Value |
+|---|---|
+| `PUBLIC_URL` | Your Render URL, e.g. `https://clipq-ab12.onrender.com` (no trailing slash) |
+| `TURSO_DATABASE_URL` | From A1 |
+| `TURSO_AUTH_TOKEN` | From A1 |
+| `KICK_CLIENT_ID` / `KICK_CLIENT_SECRET` | From step A3. Put `-` for now and edit them after A3. |
+
+4. Click **Apply** or **Create**. The first build takes ~5 minutes. When it's done, open `https://<your-url>/healthz`. It should show `{"ok":true,...}`.
+
+## A3. Create the Kick developer app
+
+1. Go to <https://kick.com/settings/developer> and click **Create App**. Kick asks you to enable 2FA first.
+2. **Redirect URL:** `https://<your-render-url>/auth/callback`
+3. **Scopes:** `user:read` and `channel:read`.
+4. Copy the **Client ID** and **Client Secret** into the Render service's **Environment** page. Saving restarts the service.
+
+## A4. Keep it awake with UptimeRobot
+
+1. Sign up at <https://uptimerobot.com>, free.
+2. **New monitor** → type **HTTP(s)**, URL `https://<your-render-url>/healthz`, interval **5 minutes**.
+3. That's it. Render only sleeps after 15 minutes without visits, and this visits every 5.
+
+If UptimeRobot doesn't work for you, <https://cron-job.org> does the same job: a free job that GETs `/healthz` every 5 minutes.
+
+## A5. Check it works
+
+1. Open your Render URL, click **Log in with Kick** and approve.
+2. Click **Open queue** and post a clip link in your Kick chat. It should appear within a few seconds.
+3. In Render's dashboard, **Manual Deploy → Restart service**. After it's back, your queue should still be there. That's Turso working.
+
+## Updating (Option A)
+
+Push to GitHub, then in Render: **Manual Deploy → Deploy latest commit**. Do it when nobody is streaming.
+
+## Troubleshooting (Option A)
+
+| Symptom | Likely cause |
+|---|---|
+| Deploy fails, logs say `turso` / `SERVER_ERROR` / `401` | Wrong `TURSO_DATABASE_URL` or token, or the token expired. Create a new token and update the env var. |
+| App is slow to open, then works | It was asleep. Check that the UptimeRobot monitor is running and hitting `/healthz`. |
+| Yellow "Chatroom not found" box after login | Kick's Cloudflare blocked Render's IP. Open `https://kick.com/api/v2/channels/<your-channel>` in your browser, copy `chatroom.id` and paste it into the box. It's saved in Turso, so you only do this once. |
+| Kick clips show "Loading clip…" then "can't be embedded" | Kick's API refused both the server and your browser. Use **Open clip in a new tab** for that clip. |
+| `Kick login failed` | The Kick app's redirect URL doesn't exactly match `PUBLIC_URL` + `/auth/callback`. |
+| Service suspended near the end of the month | Free hours ran out because another free Render service shares them. Delete the other one. |
+
+---
+
+# Option B: Oracle Cloud Always Free VM
 
 What you end up with: one free Ubuntu server running two containers.
 
