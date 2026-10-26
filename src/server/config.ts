@@ -29,6 +29,8 @@ export const config = {
       }
     : null,
   devLogin: env("DEV_LOGIN", "0") === "1",
+  /** Google Search Console "HTML tag" token. Accepts the bare token or "google-site-verification=<token>". */
+  googleSiteVerification: (process.env.GOOGLE_SITE_VERIFICATION ?? "").trim().replace(/^google-site-verification=/, "") || null,
   /** Optional copy of the database in Turso, for hosts whose disk is wiped on restart. */
   turso: process.env.TURSO_DATABASE_URL?.trim()
     ? { url: env("TURSO_DATABASE_URL"), authToken: process.env.TURSO_AUTH_TOKEN?.trim() || undefined }

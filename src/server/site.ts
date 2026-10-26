@@ -5,6 +5,10 @@ import { join } from "node:path";
 import { config } from "./config.js";
 import type { Sessions } from "./sessions.js";
 
+function escapeAttr(s: string) {
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
 /** Placeholder in the landing HTML for the absolute site URL (canonical, hreflang, og:image). */
 const SITE_URL = "__SITE_URL__";
 
@@ -16,8 +20,12 @@ export async function registerSite(app: FastifyInstance, webRoot: string, sessio
   if (!existsSync(webRoot)) return;
 
   const page = (file: string) => readFileSync(join(webRoot, file), "utf8").replaceAll(SITE_URL, config.publicUrl);
-  const landingEn = page("index.html");
-  const landingFa = page("fa/index.html");
+  // Search Console ownership check: the token is per site, so it comes from the environment.
+  const verify = config.googleSiteVerification;
+  const withVerification = (html: string) =>
+    verify ? html.replace("</head>", `  <meta name="google-site-verification" content="${escapeAttr(verify)}" />\n  </head>`) : html;
+  const landingEn = withVerification(page("index.html"));
+  const landingFa = withVerification(page("fa/index.html"));
   const dashboard = page("app/index.html");
 
   await app.register(fastifyStatic, {
