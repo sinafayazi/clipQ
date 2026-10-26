@@ -38,6 +38,7 @@
       href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Source+Sans+3:wght@400;600;700&display=swap"
     />
     <link rel="stylesheet" href="./landing.css" />
+    <script type="module" src="./landing-demo.ts"></script>
 
     <script type="application/ld+json">
       {
@@ -119,17 +120,38 @@
             <p class="fineprint">No download, no bot to add. Log in once and clipQ starts listening to your chat.</p>
           </div>
 
-          <div class="mock" role="img" aria-label="Preview of the clipQ dashboard: a clip playing and three clips waiting in the queue">
-            <div class="mock-bar"><span class="tally" aria-hidden="true"></span>clipQ <span class="live">Chat connected</span></div>
-            <div class="mock-player">
-              <p>Insane clutch in the final round<small>Kick · requested by Radin_SD · 0:41</small></p>
+          <figure class="demo" aria-label="Example: links posted in Kick chat appear in the clipQ queue">
+            <span class="demo-badge">Example</span>
+            <div class="demo-panels" aria-hidden="true">
+              <div class="demo-chat">
+                <p class="demo-head"><span class="kick-dot"></span>Kick chat</p>
+                <ol id="demo-chat" class="chat-lines">
+                  <li class="chat-line"><b style="color: #ffa600">Radin_SD</b><span>W stream today</span></li>
+                  <li class="chat-line"><b style="color: #00f1ff">LowGraphic</b><span class="chat-link" dir="ltr">youtu.be/xK2…</span></li>
+                  <li class="chat-line"><b style="color: #b388ff">Amir_1446</b><span class="chat-link" dir="ltr">clips.twitch.tv/Wild…</span></li>
+                  <li class="chat-line"><b style="color: #ff6b9a">Mahsa</b><span>play mine next pls</span></li>
+                  <li class="chat-line"><b style="color: #53fc18">Siiinfa</b><span class="chat-link" dir="ltr">tiktok.com/@…/video/73…</span></li>
+                </ol>
+              </div>
+              <div class="demo-app">
+                <p class="demo-head"><span class="tally"></span>clipQ</p>
+                <div id="demo-now" class="demo-now">
+                  <div class="demo-screen kick">
+                    <span class="demo-play"></span>
+                    <span class="demo-progress run"></span>
+                  </div>
+                  <p class="demo-now-title">Insane clutch, final round</p>
+                  <p class="demo-now-meta">Kick · requested by Radin_SD · 0:41</p>
+                </div>
+                <ol id="demo-queue" class="demo-queue">
+                  <li class="demo-card"><span class="demo-thumb youtube"><span class="dur">0:58</span></span><span class="demo-card-text"><b>Funniest fail of the week</b><small>YouTube · LowGraphic</small></span></li>
+                  <li class="demo-card"><span class="demo-thumb twitch"><span class="dur">0:30</span></span><span class="demo-card-text"><b>Chat goes wild</b><small>Twitch · Amir_1446</small></span></li>
+                  <li class="demo-card"><span class="demo-thumb tiktok"><span class="dur">0:22</span></span><span class="demo-card-text"><b>Cat vs printer</b><small>TikTok · Siiinfa</small></span></li>
+                </ol>
+              </div>
             </div>
-            <ol class="mock-list">
-              <li><span class="thumb"></span><div><b>1. Funniest fail of the week</b><span>YouTube · LowGraphic</span></div></li>
-              <li><span class="thumb"></span><div><b>2. Chat goes wild</b><span>Twitch · Amir_1446</span></div></li>
-              <li><span class="thumb"></span><div><b>3. Cat vs printer</b><span>TikTok · Siiinfa</span></div></li>
-            </ol>
-          </div>
+            <figcaption>Viewers post links in chat. Each one lands in your queue, in order.</figcaption>
+          </figure>
         </div>
       </div>
 

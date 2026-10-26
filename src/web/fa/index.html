@@ -38,6 +38,7 @@
       href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Vazirmatn:wght@400;600;700;800&display=swap"
     />
     <link rel="stylesheet" href="../landing.css" />
+    <script type="module" src="../landing-demo.ts"></script>
 
     <script type="application/ld+json">
       {
@@ -119,17 +120,38 @@
             <p class="fineprint">نه چیزی نصب می‌کنی، نه رباتی اضافه می‌کنی. یه بار وارد شو و clipQ چتت رو گوش می‌ده.</p>
           </div>
 
-          <div class="mock" role="img" aria-label="پیش‌نمایش داشبورد clipQ: یک کلیپ در حال پخش و سه کلیپ در صف">
-            <div class="mock-bar" dir="ltr"><span class="tally" aria-hidden="true"></span>clipQ <span class="live">Chat connected</span></div>
-            <div class="mock-player">
-              <p>کلاچ دیوونه‌وار راند آخر<small>کیک · درخواست از Radin_SD · ۰:۴۱</small></p>
+          <figure class="demo" aria-label="نمونه: لینک‌هایی که توی چت کیک فرستاده می‌شن توی صف clipQ میان">
+            <span class="demo-badge">نمونه</span>
+            <div class="demo-panels" aria-hidden="true">
+              <div class="demo-chat">
+                <p class="demo-head"><span class="kick-dot"></span>چت کیک</p>
+                <ol id="demo-chat" class="chat-lines">
+                  <li class="chat-line"><b style="color: #ffa600">Radin_SD</b><span>استریم امروز عالیه</span></li>
+                  <li class="chat-line"><b style="color: #00f1ff">LowGraphic</b><span class="chat-link" dir="ltr">youtu.be/xK2…</span></li>
+                  <li class="chat-line"><b style="color: #b388ff">Amir_1446</b><span class="chat-link" dir="ltr">clips.twitch.tv/Wild…</span></li>
+                  <li class="chat-line"><b style="color: #ff6b9a">Mahsa</b><span>بعدی مال منو بذار</span></li>
+                  <li class="chat-line"><b style="color: #53fc18">Siiinfa</b><span class="chat-link" dir="ltr">tiktok.com/@…/video/73…</span></li>
+                </ol>
+              </div>
+              <div class="demo-app">
+                <p class="demo-head" lang="en"><span class="tally"></span>clipQ</p>
+                <div id="demo-now" class="demo-now">
+                  <div class="demo-screen kick">
+                    <span class="demo-play"></span>
+                    <span class="demo-progress run"></span>
+                  </div>
+                  <p class="demo-now-title">کلاچ دیوونه‌وار راند آخر</p>
+                  <p class="demo-now-meta">کیک · درخواست از Radin_SD · ۰:۴۱</p>
+                </div>
+                <ol id="demo-queue" class="demo-queue">
+                  <li class="demo-card"><span class="demo-thumb youtube"><span class="dur">۰:۵۸</span></span><span class="demo-card-text"><b>خنده‌دارترین سوتی هفته</b><small>یوتیوب · LowGraphic</small></span></li>
+                  <li class="demo-card"><span class="demo-thumb twitch"><span class="dur">۰:۳۰</span></span><span class="demo-card-text"><b>چت منفجر شد</b><small>توییچ · Amir_1446</small></span></li>
+                  <li class="demo-card"><span class="demo-thumb tiktok"><span class="dur">۰:۲۲</span></span><span class="demo-card-text"><b>گربه در برابر پرینتر</b><small>تیک‌تاک · Siiinfa</small></span></li>
+                </ol>
+              </div>
             </div>
-            <ol class="mock-list">
-              <li><span class="thumb"></span><div><b>۱. خنده‌دارترین سوتی هفته</b><span>یوتیوب · LowGraphic</span></div></li>
-              <li><span class="thumb"></span><div><b>۲. چت منفجر شد</b><span>توییچ · Amir_1446</span></div></li>
-              <li><span class="thumb"></span><div><b>۳. گربه در برابر پرینتر</b><span>تیک‌تاک · Siiinfa</span></div></li>
-            </ol>
-          </div>
+            <figcaption>بیننده‌ها لینک رو توی چت می‌فرستن. هر کدوم به ترتیب میاد توی صف تو.</figcaption>
+          </figure>
         </div>
       </div>
 
