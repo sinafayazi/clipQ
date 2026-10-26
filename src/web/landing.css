@@ -84,6 +84,8 @@ code {
   border-radius: 6px;
   padding: 0.1em 0.4em;
   unicode-bidi: isolate;
+  /* keep commands like "!cq open" on one line */
+  white-space: nowrap;
 }
 
 :focus-visible {
