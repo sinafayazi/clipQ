@@ -1,0 +1,6 @@
+# Caddy gets and renews the Let's Encrypt certificate for $DOMAIN by itself.
+# WebSockets (/ws) pass through reverse_proxy without extra config.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy clipq:3000
+}
