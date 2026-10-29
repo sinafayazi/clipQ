@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { findClips, parseClipUrl, parseTimestamp } from "../src/server/clips/parse.js";
+import { parseDuration } from "../src/server/bridge.js";
 
 const ref = (url: string) => {
   const r = parseClipUrl(url);
@@ -75,6 +76,23 @@ describe("parseClipUrl", () => {
     expect(ref("https://x.com/user")).toBeNull();
   });
 
+  it.each([
+    "https://www.instagram.com/reel/C9xYz_Ab12/",
+    "https://instagram.com/reels/C9xYz_Ab12?igsh=abc",
+    "https://www.instagram.com/p/C9xYz_Ab12/?img_index=1",
+    "instagram.com/tv/C9xYz_Ab12",
+    "https://www.instagram.com/someone/reel/C9xYz_Ab12/",
+    "https://m.instagram.com/reel/C9xYz_Ab12",
+  ])("instagram %s", (url) => {
+    expect(ref(url)).toMatchObject({ provider: "instagram", id: "C9xYz_Ab12" });
+  });
+
+  it("normalises instagram links and rejects profiles", () => {
+    expect(parseClipUrl("instagram.com/reels/C9xYz_Ab12?igsh=abc")?.url).toBe("https://www.instagram.com/p/C9xYz_Ab12/");
+    expect(ref("https://www.instagram.com/someone/")).toBeNull();
+    expect(ref("https://www.instagram.com/stories/someone/123/")).toBeNull();
+  });
+
   it("streamable", () => {
     expect(ref("https://streamable.com/abc12")).toMatchObject({ provider: "streamable", id: "abc12" });
     expect(ref("https://streamable.com/e/abc12")).toMatchObject({ provider: "streamable", id: "abc12" });
@@ -121,4 +139,18 @@ describe("parseTimestamp", () => {
     ["", 0],
     ["abc", 0],
   ])("%s -> %d", (t, s) => expect(parseTimestamp(t)).toBe(s));
+});
+
+describe("parseDuration", () => {
+  it.each([
+    ["30s", 30_000],
+    ["10m", 600_000],
+    ["2h", 7_200_000],
+    ["1d", 86_400_000],
+    ["15", 900_000],
+    ["0m", null],
+    ["31d", null],
+    ["10x", null],
+    ["", null],
+  ])("%s -> %s", (t, ms) => expect(parseDuration(t)).toBe(ms));
 });

@@ -19,6 +19,8 @@ export function Player({ item, onEnded }: Props) {
       return <Frame src={`https://clips.twitch.tv/embed?clip=${enc(item.clipId)}&parent=${location.hostname}&autoplay=true`} />;
     case "tiktok":
       return <TikTok id={item.clipId} onEnded={onEnded} />;
+    case "instagram":
+      return <Frame src={`https://www.instagram.com/p/${enc(item.clipId)}/embed/`} />;
     case "x":
       return <Frame src={`https://platform.twitter.com/embed/Tweet.html?id=${enc(item.clipId)}&theme=dark&dnt=true`} />;
     case "streamable":

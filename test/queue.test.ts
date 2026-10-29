@@ -274,3 +274,122 @@ describe("settings", () => {
     expect(s.settings(1).maxSize).toBe(100);
   });
 });
+
+describe("per-platform access", () => {
+  const vip = (id: number) => ({ id, username: `v${id}`, color: null });
+
+  it("everyone can post by default", async () => {
+    expect((await q.submit(CH, yt("a"), alice, "m1", [])).ok).toBe(true);
+  });
+
+  it("limits a platform to the chosen badges", async () => {
+    q.updateSettings(CH, { access: { youtube: ["og", "vip"] }, perUserLimit: 0 });
+    expect(await q.submit(CH, yt("a"), alice, "m1", [])).toEqual({ ok: false, reason: "not_allowed" });
+    expect(await q.submit(CH, yt("b"), alice, "m2", ["subscriber"])).toEqual({ ok: false, reason: "not_allowed" });
+    expect((await q.submit(CH, yt("c"), vip(5), "m3", ["vip"])).ok).toBe(true);
+    expect((await q.submit(CH, yt("d"), vip(6), "m4", ["og", "subscriber"])).ok).toBe(true);
+  });
+
+  it("only affects that platform", async () => {
+    q.updateSettings(CH, { access: { youtube: ["moderator"] } });
+    const kick: ClipRef = { provider: "kick", id: "clip_01K33WRXJM0KT1XZTXVAZJR5RJ", url: "https://kick.com/x/clips/clip_01K33WRXJM0KT1XZTXVAZJR5RJ" };
+    expect((await q.submit(CH, kick, alice, "m1", [])).ok).toBe(true);
+  });
+
+  it("subscribers include founders; the broadcaster is always allowed", async () => {
+    q.updateSettings(CH, { access: { youtube: ["subscriber"] }, perUserLimit: 0 });
+    expect((await q.submit(CH, yt("a"), alice, "m1", ["founder"])).ok).toBe(true);
+    q.updateSettings(CH, { access: { youtube: ["moderator"] } });
+    expect((await q.submit(CH, yt("b"), bob, "m2", ["broadcaster"])).ok).toBe(true);
+  });
+
+  it("rejects an empty group list", () => {
+    expect(() => q.updateSettings(CH, { access: { youtube: [] } })).toThrow();
+  });
+});
+
+describe("bans and timeouts", () => {
+  it("ignores a banned viewer's links and removes what they had waiting", async () => {
+    q.updateSettings(CH, { perUserLimit: 0 });
+    await q.submit(CH, yt("a"), alice, "m1");
+    await q.submit(CH, yt("b"), bob, "m2");
+    q.ban(CH, "Alice", null);
+    expect(ids()).toEqual(["b"]);
+    expect(await q.submit(CH, yt("c"), alice, "m3")).toEqual({ ok: false, reason: "banned" });
+    expect(q.state(CH, true).bans).toMatchObject([{ username: "alice", until: null }]);
+  });
+
+  it("matches @names and any capitalisation", async () => {
+    q.ban(CH, "@ALICE", null);
+    expect(await q.submit(CH, yt("a"), { ...alice, username: "aLiCe" }, "m1")).toEqual({ ok: false, reason: "banned" });
+  });
+
+  it("follows a viewer who was seen before, even after a rename", async () => {
+    await q.submit(CH, yt("a"), alice, "m1");
+    q.ban(CH, "alice", null);
+    expect(await q.submit(CH, yt("b"), { ...alice, username: "alice_new" }, "m2")).toEqual({ ok: false, reason: "banned" });
+  });
+
+  it("a timeout ends by itself", async () => {
+    q.ban(CH, "alice", 60_000);
+    expect(await q.submit(CH, yt("a"), alice, "m1")).toEqual({ ok: false, reason: "banned" });
+    clock += 61_000;
+    expect((await q.submit(CH, yt("a"), alice, "m2")).ok).toBe(true);
+    expect(q.state(CH, true).bans).toEqual([]);
+  });
+
+  it("re-banning replaces the old ban; unban lifts it", async () => {
+    q.ban(CH, "alice", 60_000);
+    q.ban(CH, "alice", null);
+    expect(q.state(CH, true).bans).toHaveLength(1);
+    expect(q.state(CH, true).bans[0]?.until).toBeNull();
+    expect(q.unban(CH, "ALICE")).toBe(true);
+    expect((await q.submit(CH, yt("a"), alice, "m1")).ok).toBe(true);
+  });
+
+  it("removes the banned viewer's playing clip and starts the next one", async () => {
+    q.updateSettings(CH, { perUserLimit: 0 });
+    await q.submit(CH, yt("a"), alice, "m1");
+    await q.submit(CH, yt("b"), bob, "m2");
+    q.next(CH);
+    q.ban(CH, "alice", 60_000);
+    expect(current()).toBe("b");
+  });
+
+  it("a ban during the lookup still stops the link", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const inner = resolver;
+    resolver = async (ref) => (await gate, inner(ref));
+    const pending = q.submit(CH, yt("a"), alice, "m1");
+    q.ban(CH, "alice", null);
+    release();
+    expect(await pending).toEqual({ ok: false, reason: "banned" });
+  });
+
+  it("refuses silly durations and empty names", () => {
+    expect(q.ban(CH, "alice", 0)).toBeNull();
+    expect(q.ban(CH, "alice", 365 * 86_400_000)).toBeNull();
+    expect(q.ban(CH, "  @ ", null)).toBeNull();
+    expect(q.state(CH, true).bans).toEqual([]);
+  });
+
+  it("bans are per channel", async () => {
+    q.upsertChannel({ id: 200, slug: "other", displayName: "Other", chatroomId: 777 }, 200);
+    q.updateSettings(200, { open: true });
+    q.ban(CH, "alice", null);
+    expect((await q.submit(200, yt("a"), alice, "m1")).ok).toBe(true);
+  });
+});
+
+describe("settings migration", () => {
+  it("turns Instagram on for settings saved before it existed, once", () => {
+    const db = openDb(":memory:");
+    const s = new QueueService(db, resolver);
+    s.upsertChannel({ id: 1, slug: "x", displayName: "x", chatroomId: null }, 1);
+    db.prepare(`UPDATE channels SET settings = ? WHERE id = 1`).run(JSON.stringify({ providers: ["kick", "youtube"] }));
+    expect(s.settings(1).providers).toEqual(["kick", "youtube", "instagram"]);
+    s.updateSettings(1, { providers: ["kick"] });
+    expect(s.settings(1).providers).toEqual(["kick"]);
+  });
+});

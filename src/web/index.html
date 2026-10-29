@@ -6,7 +6,7 @@
     <title>clipQ: clip queue for Kick streamers</title>
     <meta
       name="description"
-      content="Free clip queue for Kick. Viewers post Kick, YouTube, Twitch or TikTok links in your chat, and you watch them on stream, in order, with spam limits and mod commands built in."
+      content="Free clip queue for Kick. Viewers post Kick, YouTube, Twitch, TikTok or Instagram links in your chat, and you watch them on stream, in order, with spam limits and mod commands built in."
     />
     <link rel="canonical" href="__SITE_URL__/" />
     <link rel="alternate" hreflang="en" href="__SITE_URL__/" />
@@ -66,7 +66,7 @@
           {
             "@type": "Question",
             "name": "Which links does clipQ accept?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Kick clips, YouTube videos and Shorts, Twitch clips, TikTok, X (Twitter) posts and Streamable." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Kick clips, YouTube videos and Shorts, Twitch clips, TikTok, Instagram Reels and posts, X (Twitter) posts and Streamable." }
           },
           {
             "@type": "Question",
@@ -191,11 +191,11 @@
             </article>
             <article>
               <h3>Spam limits</h3>
-              <p>Each viewer can only have a few clips waiting, and the same clip can't be added twice.</p>
+              <p>Each viewer can only have a few clips waiting, the same clip can't be added twice, and you choose who can post each platform: subs, OGs, VIPs or mods.</p>
             </article>
             <article>
               <h3>Mods stay in control</h3>
-              <p>If a mod deletes a message or bans someone, their clips disappear from the queue right away.</p>
+              <p>Ban or time out a viewer in clipQ and their links are ignored. Deleted messages and Kick bans remove clips right away.</p>
             </article>
             <article>
               <h3>Plays by itself</h3>
@@ -224,6 +224,7 @@
             <li>YouTube &amp; Shorts</li>
             <li>Twitch clips</li>
             <li>TikTok</li>
+            <li>Instagram Reels</li>
             <li>X (Twitter)</li>
             <li>Streamable</li>
           </ul>
@@ -249,6 +250,10 @@
             <dd>Replay the previous clip</dd>
             <dt><code>!cq clear</code></dt>
             <dd>Empty the queue</dd>
+            <dt><code>!cq timeout name 10m</code></dt>
+            <dd>Ignore someone's links for a while</dd>
+            <dt><code>!cq ban name</code></dt>
+            <dd>Ignore someone's links until unbanned (<code>!cq unban name</code>)</dd>
           </dl>
         </div>
       </section>
@@ -265,7 +270,7 @@
             </details>
             <details>
               <summary>Which links does clipQ accept?</summary>
-              <p>Kick clips, YouTube videos and Shorts, Twitch clips, TikTok, X (Twitter) posts and Streamable.</p>
+              <p>Kick clips, YouTube videos and Shorts, Twitch clips, TikTok, Instagram Reels and posts, X (Twitter) posts and Streamable.</p>
             </details>
             <details>
               <summary>Does the dashboard have to stay open to collect clips?</summary>

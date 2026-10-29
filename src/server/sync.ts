@@ -17,10 +17,11 @@ const TABLES = {
     "media_url", "requester_id", "requester_name", "requester_color", "message_id", "status", "position",
     "created_at", "finished_at",
   ],
+  bans: ["id", "channel_id", "username", "user_id", "until", "created_at"],
 } as const;
 type Table = keyof typeof TABLES;
 /** Parents first, so restored rows satisfy the local foreign keys. */
-const ORDER: Table[] = ["channels", "sessions", "items"];
+const ORDER: Table[] = ["channels", "sessions", "items", "bans"];
 
 const REMOTE_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS channels (id INTEGER PRIMARY KEY, slug TEXT, display_name TEXT, chatroom_id INTEGER,
@@ -30,10 +31,12 @@ const REMOTE_SCHEMA = [
      url TEXT, start INTEGER, title TEXT, thumbnail TEXT, author TEXT, duration REAL, media_url TEXT, requester_id INTEGER,
      requester_name TEXT, requester_color TEXT, message_id TEXT, status TEXT, position INTEGER, created_at INTEGER,
      finished_at INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS bans (id INTEGER PRIMARY KEY, channel_id INTEGER, username TEXT, user_id INTEGER, until INTEGER,
+     created_at INTEGER)`,
 ];
 
 /**
- * Restored item ids jump ahead by this much. While Render swaps instances during a deploy, the old
+ * Restored item and ban ids jump ahead by this much. While Render swaps instances during a deploy, the old
  * one can still add items for a few seconds; the gap keeps the new one from reusing their ids.
  */
 const ID_GAP = 10_000;
@@ -65,7 +68,7 @@ export class TursoSync {
       return;
     }
 
-    const rows: Record<Table, Record<string, unknown>[]> = { channels: [], sessions: [], items: [] };
+    const rows: Record<Table, Record<string, unknown>[]> = { channels: [], sessions: [], items: [], bans: [] };
     for (const t of ORDER) {
       const res = await this.remote.execute(`SELECT ${TABLES[t].join(", ")} FROM ${t}`);
       rows[t] = res.rows.map((r) => Object.fromEntries(TABLES[t].map((c) => [c, r[c] ?? null])));
@@ -77,14 +80,16 @@ export class TursoSync {
         const insert = this.db.prepare(`INSERT INTO ${t} (${cols.join(", ")}) VALUES (${cols.map((c) => "@" + c).join(", ")})`);
         for (const row of rows[t]) insert.run(row);
       }
-      const maxId = rows.items.reduce((m, r) => Math.max(m, Number(r.id)), 0);
-      this.db.prepare(`DELETE FROM sqlite_sequence WHERE name = 'items'`).run();
-      this.db.prepare(`INSERT INTO sqlite_sequence (name, seq) VALUES ('items', ?)`).run(maxId + ID_GAP);
+      for (const t of ["items", "bans"] as const) {
+        const maxId = rows[t].reduce((m, r) => Math.max(m, Number(r.id)), 0);
+        this.db.prepare(`DELETE FROM sqlite_sequence WHERE name = ?`).run(t);
+        this.db.prepare(`INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)`).run(t, maxId + ID_GAP);
+      }
       // Everything local now matches Turso.
       this.db.prepare(`UPDATE sync_clock SET pushed = seq`).run();
       this.db.prepare(`DELETE FROM sync_deletes`).run();
     })();
-    this.log.info(`turso: restored ${rows.channels.length} channels, ${rows.items.length} items, ${rows.sessions.length} sessions`);
+    this.log.info(`turso: restored ${rows.channels.length} channels, ${rows.items.length} items, ${rows.sessions.length} sessions, ${rows.bans.length} bans`);
   }
 
   /** Push changes every second until stop(). */

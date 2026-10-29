@@ -34,6 +34,9 @@ export const api = {
   clear: () => post("/api/queue/clear"),
   settings: (patch: Partial<QueueSettings>) => post("/api/settings", patch),
   chatroom: (chatroomId: number) => post("/api/chatroom", { chatroomId }),
+  /** minutes = null bans for good */
+  ban: (username: string, minutes: number | null) => post("/api/bans", { username, minutes }),
+  unban: (username: string) => post("/api/bans/remove", { username }),
   logout: () => post("/auth/logout"),
 };
 

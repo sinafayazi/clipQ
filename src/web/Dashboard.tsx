@@ -1,25 +1,34 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, type CSSProperties } from "react";
 import type { QueueItem, QueueState } from "../shared/types";
 import { api, type Connection } from "./api";
-import { formatDuration, PROVIDER_LABEL } from "./clip-meta";
+import { clipTitle, formatDuration, PROVIDER_LABEL } from "./clip-meta";
 import {
   AlertIcon,
+  BanIcon,
   CloseIcon,
+  DownIcon,
   ExternalIcon,
+  GripIcon,
   LiveIcon,
   LogoutIcon,
   NextIcon,
   PlayIcon,
   PrevIcon,
   ProviderIcon,
+  SettingsIcon,
   SkipIcon,
+  UpIcon,
 } from "./icons";
 import { Player } from "./Player";
+import { useDragReorder } from "./reorder";
+import { BanDialog, SettingsDialog } from "./Settings";
 
 export function Dashboard({ state, conn }: { state: QueueState; conn: Connection }) {
   const [error, setError] = useState<string | null>(null);
   const { channel, settings, current, queue, history } = state;
   const clearDialog = useRef<HTMLDialogElement>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [banTarget, setBanTarget] = useState<string | null>(null);
 
   const run = useCallback((p: Promise<unknown>) => {
     p.then(
@@ -66,6 +75,10 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
             <span className="switch-ui" />
             Queue open
           </label>
+          <button type="button" className="btn btn-ghost icon-start" onClick={() => setSettingsOpen(true)}>
+            <SettingsIcon size={18} stroke={2} />
+            Settings
+          </button>
           <a className="btn btn-ghost" href="https://nowpayments.io/donation/sina" target="_blank" rel="noopener">
             ♥ Donate
           </a>
@@ -107,8 +120,8 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
           </div>
           {current && (
             <div className="now">
-              <a href={current.url} target="_blank" rel="noreferrer" title={current.title ?? current.url}>
-                <span className="now-title">{current.title ?? current.url}</span>
+              <a href={current.url} target="_blank" rel="noreferrer" title={current.url}>
+                <span className="now-title">{clipTitle(current)}</span>
                 <ExternalIcon size={16} stroke={2} />
               </a>
               <p className="now-meta">
@@ -160,11 +173,7 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
                 : "Open the queue to accept clips from chat."}
             </p>
           ) : (
-            <ol className="clips">
-              {queue.map((item, i) => (
-                <ClipRow key={item.id} item={item} index={i} run={run} />
-              ))}
-            </ol>
+            <QueueList queue={queue} run={run} onBan={setBanTarget} />
           )}
         </aside>
         </div>
@@ -193,14 +202,68 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
           </button>
         </form>
       </dialog>
+
+      <SettingsDialog state={state} open={settingsOpen} onClose={() => setSettingsOpen(false)} run={run} />
+      <BanDialog username={banTarget} onClose={() => setBanTarget(null)} run={run} />
     </div>
   );
 }
 
-function ClipRow({ item, index, run }: { item: QueueItem; index: number; run: (p: Promise<unknown>) => void }) {
-  const title = item.title ?? item.url;
+function QueueList({ queue, run, onBan }: { queue: QueueItem[]; run: (p: Promise<unknown>) => void; onBan: (username: string) => void }) {
+  const drag = useDragReorder(queue, (id, to) => run(api.move(id, to)));
   return (
-    <li className="clip">
+    <ol className={`clips${drag.draggingId !== null ? " is-dragging" : ""}`}>
+      {drag.items.map((item, i) => (
+        <ClipRow
+          key={item.id}
+          item={item}
+          index={i}
+          count={drag.items.length}
+          run={run}
+          onBan={onBan}
+          rowRef={drag.rowRef(item.id)}
+          style={drag.rowStyle(item.id, i)}
+          dragging={drag.draggingId === item.id}
+          handle={drag.handleProps(item.id, i)}
+        />
+      ))}
+    </ol>
+  );
+}
+
+function ClipRow({
+  item,
+  index,
+  count,
+  run,
+  onBan,
+  rowRef,
+  style,
+  dragging,
+  handle,
+}: {
+  item: QueueItem;
+  index: number;
+  count: number;
+  run: (p: Promise<unknown>) => void;
+  onBan: (username: string) => void;
+  rowRef: (el: HTMLElement | null) => void;
+  style: CSSProperties | undefined;
+  dragging: boolean;
+  handle: ReturnType<ReturnType<typeof useDragReorder>["handleProps"]>;
+}) {
+  const title = clipTitle(item);
+  return (
+    <li ref={rowRef} className={`clip${dragging ? " dragging" : ""}`} style={style}>
+      <button
+        type="button"
+        className="drag-handle"
+        aria-label={`Reorder ${title}. Drag, or use the arrow keys.`}
+        title="Drag to reorder"
+        {...handle}
+      >
+        <GripIcon size={18} stroke={2} />
+      </button>
       <button type="button" className="thumb-btn" onClick={() => run(api.play(item.id))} aria-label={`Play ${title}`}>
         <Thumb item={item} />
       </button>
@@ -212,14 +275,46 @@ function ClipRow({ item, index, run }: { item: QueueItem; index: number; run: (p
           {PROVIDER_LABEL[item.provider]} · {item.requestedBy.username}
         </p>
       </div>
-      <button
-        className="btn btn-ghost btn-icon clip-remove"
-        type="button"
-        aria-label={`Remove ${title} from queue`}
-        onClick={() => run(api.remove(item.id))}
-      >
-        <CloseIcon size={16} stroke={2} />
-      </button>
+      <div className="clip-actions">
+        <button
+          className="btn btn-ghost btn-icon"
+          type="button"
+          aria-label={`Move ${title} up`}
+          title="Move up"
+          disabled={index === 0}
+          onClick={() => run(api.move(item.id, index - 1))}
+        >
+          <UpIcon size={16} stroke={2} />
+        </button>
+        <button
+          className="btn btn-ghost btn-icon clip-ban"
+          type="button"
+          aria-label={`Ban ${item.requestedBy.username}`}
+          title={`Ban ${item.requestedBy.username}`}
+          onClick={() => onBan(item.requestedBy.username)}
+        >
+          <BanIcon size={16} stroke={2} />
+        </button>
+        <button
+          className="btn btn-ghost btn-icon"
+          type="button"
+          aria-label={`Move ${title} down`}
+          title="Move down"
+          disabled={index === count - 1}
+          onClick={() => run(api.move(item.id, index + 1))}
+        >
+          <DownIcon size={16} stroke={2} />
+        </button>
+        <button
+          className="btn btn-ghost btn-icon clip-remove"
+          type="button"
+          aria-label={`Remove ${title} from queue`}
+          title="Remove"
+          onClick={() => run(api.remove(item.id))}
+        >
+          <CloseIcon size={16} stroke={2} />
+        </button>
+      </div>
     </li>
   );
 }

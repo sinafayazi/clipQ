@@ -1,13 +1,19 @@
-import type { Provider } from "../shared/types";
+import type { Provider, QueueItem } from "../shared/types";
 
 export const PROVIDER_LABEL: Record<Provider, string> = {
   kick: "Kick",
   youtube: "YouTube",
   twitch: "Twitch",
   tiktok: "TikTok",
+  instagram: "Instagram",
   x: "X",
   streamable: "Streamable",
 };
+
+/** Title to show; some providers (Instagram) give none, and a bare URL reads badly. */
+export function clipTitle(item: QueueItem): string {
+  return item.title ?? `${PROVIDER_LABEL[item.provider]} clip`;
+}
 
 export function formatDuration(seconds: number): string {
   const total = Math.max(0, Math.round(seconds));

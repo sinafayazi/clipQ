@@ -39,6 +39,12 @@ export async function resolveClip(ref: ClipRef): Promise<Resolved> {
 type Result = ClipMeta | "not_found" | "unplayable";
 
 const RESOLVERS: Record<ClipRef["provider"], (ref: ClipRef) => Promise<Result>> = {
+  // Instagram's oEmbed needs a Facebook app token; without one there's no metadata to fetch.
+  // The embed player still works, so the clip is kept with empty metadata.
+  async instagram() {
+    return EMPTY;
+  },
+
   async kick(ref) {
     const { clip } = await getJson<{ clip: KickClip | null }>(`https://kick.com/api/v2/clips/${ref.id}`);
     if (!clip) return "not_found";

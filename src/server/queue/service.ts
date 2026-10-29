@@ -1,8 +1,11 @@
 import { EventEmitter } from "node:events";
 import { z } from "zod";
 import {
+  ACCESS_GROUPS,
   DEFAULT_SETTINGS,
   PROVIDERS,
+  type AccessGroup,
+  type Ban,
   type ChannelInfo,
   type ClipRef,
   type ItemStatus,
@@ -23,11 +26,32 @@ export const settingsSchema = z.object({
   providers: z.array(z.enum(PROVIDERS)),
   allowRepeats: z.boolean(),
   autoAdvance: z.boolean(),
+  access: z.record(z.enum(PROVIDERS), z.array(z.enum(ACCESS_GROUPS)).min(1)),
 });
+
+/** Longest timeout accepted, so a typo can't become a near-permanent ban. */
+export const MAX_TIMEOUT_MS = 30 * 24 * 3600 * 1000;
+
+/** Kick badge types that count as each access group. */
+const GROUP_BADGES: Record<Exclude<AccessGroup, "everyone">, string[]> = {
+  subscriber: ["subscriber", "founder", "sub_gifter"],
+  og: ["og"],
+  vip: ["vip"],
+  moderator: ["moderator"],
+};
+
+/** May a viewer with these badges post links for this platform? */
+export function hasAccess(settings: QueueSettings, provider: Provider, badges: readonly string[]): boolean {
+  const groups = settings.access[provider];
+  if (!groups || groups.includes("everyone") || badges.includes("broadcaster")) return true;
+  return groups.some((g) => g !== "everyone" && GROUP_BADGES[g].some((b) => badges.includes(b)));
+}
 
 export type RejectReason =
   | "closed"
   | "provider_disabled"
+  | "not_allowed"
+  | "banned"
   | "full"
   | "user_limit"
   | "duplicate"
@@ -36,7 +60,19 @@ export type RejectReason =
   | "unplayable"
   | "moderated";
 
-export type SubmitResult = { ok: true; item: QueueItem } | { ok: false; reason: RejectReason };
+/** The sender of a link, as far as the rules care. */
+interface Viewer {
+  id: number;
+  username: string;
+  badges: readonly string[];
+}
+
+/** Kick usernames are case-insensitive; people also type them with an @. */
+export function normalizeName(username: string): string {
+  return username.trim().replace(/^@/, "").toLowerCase();
+}
+
+export type SubmitResult ={ ok: true; item: QueueItem } | { ok: false; reason: RejectReason };
 
 const QUEUE = "clips";
 const HISTORY_LIMIT = 50;
@@ -163,18 +199,19 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
       current: rows(`'playing'`, "id DESC", 1)[0] ?? null,
       queue: rows(`'queued'`, "position, id"),
       history: rows(`'played','skipped'`, "finished_at DESC, id DESC", HISTORY_LIMIT),
+      bans: this.bans(channelId),
     };
   }
 
   // ---- submissions ----------------------------------------------------------------------------
 
   /** Rules that don't need the network. Run before the lookup to save requests, and again after. */
-  check(channelId: number, ref: Pick<ClipRef, "provider" | "id">, requesterId: number): RejectReason | null {
-    const row = this.channelRow(channelId);
-    if (!row) return "closed";
+  check(channelId: number, ref: Pick<ClipRef, "provider" | "id">, who: Viewer): RejectReason | null {
+    const early = this.checkOpen(channelId, ref.provider, who);
+    if (early) return early;
+    const row = this.channelRow(channelId)!;
     const s = readSettings(row.settings);
-    if (!s.open) return "closed";
-    if (!s.providers.includes(ref.provider)) return "provider_disabled";
+    const requesterId = who.id;
 
     const count = (sql: string, ...args: unknown[]) =>
       (this.db.prepare(`SELECT COUNT(*) AS n FROM items WHERE channel_id = ? AND queue = ? AND ${sql}`).get(channelId, QUEUE, ...args) as { n: number }).n;
@@ -188,9 +225,17 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     return null;
   }
 
-  async submit(channelId: number, ref: ClipRef, requester: Requester, messageId: string | null): Promise<SubmitResult> {
+  /** `badges` are the sender's Kick badge types (for per-platform access); they aren't stored. */
+  async submit(
+    channelId: number,
+    ref: ClipRef,
+    requester: Requester,
+    messageId: string | null,
+    badges: readonly string[] = [],
+  ): Promise<SubmitResult> {
+    const who: Viewer = { id: requester.id, username: requester.username, badges };
     // Short links don't have their real id yet, so the duplicate rule waits for the lookup.
-    const early = ref.shortLink ? this.checkOpen(channelId, ref.provider) : this.check(channelId, ref, requester.id);
+    const early = ref.shortLink ? this.checkOpen(channelId, ref.provider, who) : this.check(channelId, ref, who);
     if (early) return { ok: false, reason: early };
 
     // Take a place in line now: lookups finish in any order, but chat order decides the queue.
@@ -203,7 +248,7 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
 
     return this.tx(channelId, () => {
       // Settings or the queue may have changed while we waited on the network.
-      const reason = this.check(channelId, resolved.ref, requester.id);
+      const reason = this.check(channelId, resolved.ref, who);
       if (reason) return { ok: false, reason } as const;
 
       const { meta } = resolved;
@@ -286,6 +331,64 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     });
   }
 
+  // ---- bans (clipQ only: the viewer can still chat, their links are just ignored) --------------
+
+  /**
+   * Ban a viewer for `durationMs`, or for good when null. Re-banning replaces the old ban. Their
+   * waiting and playing clips are removed.
+   */
+  ban(channelId: number, username: string, durationMs: number | null): Ban | null {
+    const name = normalizeName(username);
+    if (!name) return null;
+    if (durationMs !== null && !(durationMs > 0 && durationMs <= MAX_TIMEOUT_MS)) return null;
+    return this.tx(channelId, () => {
+      // Remember their Kick id if they've requested before, so a later rename doesn't dodge the ban.
+      const seen = this.db
+        .prepare(`SELECT requester_id AS id FROM items WHERE channel_id = ? AND lower(requester_name) = ? ORDER BY id DESC LIMIT 1`)
+        .get(channelId, name) as { id: number } | undefined;
+      const now = this.now();
+      this.db
+        .prepare(
+          `INSERT INTO bans (channel_id, username, user_id, until, created_at) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT (channel_id, username) DO UPDATE SET
+             user_id = COALESCE(excluded.user_id, bans.user_id), until = excluded.until, created_at = excluded.created_at`,
+        )
+        .run(channelId, name, seen?.id ?? null, durationMs === null ? null : now + durationMs, now);
+      this.removeWhere(channelId, `(lower(requester_name) = ? OR requester_id = ?)`, name, seen?.id ?? -1);
+      return this.bans(channelId).find((b) => b.username === name) ?? null;
+    });
+  }
+
+  unban(channelId: number, username: string): boolean {
+    const name = normalizeName(username);
+    return this.tx(channelId, () => this.db.prepare(`DELETE FROM bans WHERE channel_id = ? AND username = ?`).run(channelId, name).changes > 0);
+  }
+
+  /** Active bans, newest first. Expired timeouts are cleaned up as a side effect. */
+  bans(channelId: number): Ban[] {
+    const now = this.now();
+    const expired = this.db.prepare(`SELECT id FROM bans WHERE channel_id = ? AND until IS NOT NULL AND until <= ?`).all(channelId, now);
+    if (expired.length) this.db.prepare(`DELETE FROM bans WHERE channel_id = ? AND until IS NOT NULL AND until <= ?`).run(channelId, now);
+    return (
+      this.db.prepare(`SELECT id, username, until, created_at FROM bans WHERE channel_id = ? ORDER BY created_at DESC, id DESC`).all(channelId) as {
+        id: number;
+        username: string;
+        until: number | null;
+        created_at: number;
+      }[]
+    ).map((b) => ({ id: b.id, username: b.username, until: b.until, createdAt: b.created_at }));
+  }
+
+  isBanned(channelId: number, username: string, userId: number | null): boolean {
+    const row = this.db
+      .prepare(
+        `SELECT 1 FROM bans WHERE channel_id = ? AND (username = ? OR (user_id IS NOT NULL AND user_id = ?))
+           AND (until IS NULL OR until > ?) LIMIT 1`,
+      )
+      .get(channelId, normalizeName(username), userId ?? -1, this.now());
+    return row !== undefined;
+  }
+
   // ---- moderation -----------------------------------------------------------------------------
 
   /** A moderator deleted the chat message: drop its clips, even ones still being looked up. */
@@ -305,12 +408,12 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
   // ---- internals ------------------------------------------------------------------------------
 
   /** Removes matching queued/playing items. If the playing one goes, the next one starts. */
-  private removeWhere(channelId: number, where: string, arg: unknown): number {
+  private removeWhere(channelId: number, where: string, ...args: unknown[]): number {
     const current = this.currentId(channelId);
     const ids = (
       this.db
         .prepare(`SELECT id FROM items WHERE channel_id = ? AND queue = ? AND status IN ('queued','playing') AND ${where}`)
-        .all(channelId, QUEUE, arg) as { id: number }[]
+        .all(channelId, QUEUE, ...args) as { id: number }[]
     ).map((r) => r.id);
     if (!ids.length) return 0;
     const set = this.db.prepare(`UPDATE items SET status = 'removed', finished_at = ? WHERE id = ?`);
@@ -361,12 +464,16 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     return row ? toItem(row) : null;
   }
 
-  private checkOpen(channelId: number, provider: Provider): RejectReason | null {
+  /** Rules about the queue and the viewer, not the clip: open, platform on, viewer allowed, not banned. */
+  private checkOpen(channelId: number, provider: Provider, who: Viewer): RejectReason | null {
     const row = this.channelRow(channelId);
     if (!row) return "closed";
     const s = readSettings(row.settings);
     if (!s.open) return "closed";
-    return s.providers.includes(provider) ? null : "provider_disabled";
+    if (!s.providers.includes(provider)) return "provider_disabled";
+    if (this.isBanned(channelId, who.username, who.id)) return "banned";
+    if (!hasAccess(s, provider, who.badges)) return "not_allowed";
+    return null;
   }
 
   private recentlyBanned(channelId: number, userId: number) {
@@ -395,7 +502,13 @@ function readSettings(json: string): QueueSettings {
   try {
     stored = JSON.parse(json);
   } catch {}
-  const merged = { ...DEFAULT_SETTINGS, ...(typeof stored === "object" && stored ? stored : {}) };
+  const saved = (typeof stored === "object" && stored ? stored : {}) as Partial<QueueSettings>;
+  const merged = { ...DEFAULT_SETTINGS, ...saved };
+  // Settings saved before Instagram existed have no `access` field: turn Instagram on for them once.
+  // After the next save, `access` is present and the streamer's choice sticks.
+  if (saved.providers && !("access" in saved) && !merged.providers.includes("instagram")) {
+    merged.providers = [...merged.providers, "instagram"];
+  }
   const parsed = settingsSchema.safeParse(merged);
   return parsed.success ? parsed.data : { ...DEFAULT_SETTINGS };
 }

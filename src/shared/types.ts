@@ -1,7 +1,14 @@
 // Types shared by the server and the dashboard.
 
-export const PROVIDERS = ["kick", "youtube", "twitch", "tiktok", "x", "streamable"] as const;
+export const PROVIDERS = ["kick", "youtube", "twitch", "tiktok", "instagram", "x", "streamable"] as const;
 export type Provider = (typeof PROVIDERS)[number];
+
+/**
+ * Who may post links for a platform. "everyone" means no restriction; otherwise a viewer needs one
+ * of the listed Kick badges. The broadcaster is always allowed.
+ */
+export const ACCESS_GROUPS = ["everyone", "subscriber", "og", "vip", "moderator"] as const;
+export type AccessGroup = (typeof ACCESS_GROUPS)[number];
 
 /** A clip link found in a chat message, before any network lookup. */
 export interface ClipRef {
@@ -55,6 +62,8 @@ export interface QueueSettings {
   allowRepeats: boolean;
   /** Go to the next clip when one ends (Kick and YouTube only; other embeds don't report it). */
   autoAdvance: boolean;
+  /** Per platform, who may post. A platform missing here is open to everyone. */
+  access: Partial<Record<Provider, AccessGroup[]>>;
 }
 
 export const DEFAULT_SETTINGS: QueueSettings = {
@@ -64,7 +73,16 @@ export const DEFAULT_SETTINGS: QueueSettings = {
   providers: [...PROVIDERS],
   allowRepeats: false,
   autoAdvance: true,
+  access: {},
 };
+
+/** A viewer whose links clipQ ignores, until `until` (ms) or for good when null. */
+export interface Ban {
+  id: number;
+  username: string;
+  until: number | null;
+  createdAt: number;
+}
 
 export interface ChannelInfo {
   id: number;
@@ -80,6 +98,8 @@ export interface QueueState {
   current: QueueItem | null;
   queue: QueueItem[];
   history: QueueItem[];
+  /** Active bans and timeouts. */
+  bans: Ban[];
 }
 
 /** Messages the server pushes over /ws. */

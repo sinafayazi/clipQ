@@ -7,6 +7,7 @@ const YT_ID = /^[A-Za-z0-9_-]{11}$/;
 const TWITCH_SLUG = /^[A-Za-z0-9_-]{3,100}$/;
 const KICK_CLIP = /clip_[0-9A-Z]{26}/;
 const DIGITS = /^\d{5,25}$/;
+const IG_CODE = /^[A-Za-z0-9_-]{5,40}$/;
 
 /** All clip links in a message, in order, without duplicates. */
 export function findClips(text: string): ClipRef[] {
@@ -85,6 +86,14 @@ export function parseClipUrl(raw: string): ClipRef | null {
     case "vt.tiktok.com": {
       if (!parts[0]) return null;
       return { provider: "tiktok", id: parts[0], url, shortLink: true };
+    }
+    case "instagram.com":
+    case "instagr.am": {
+      // instagram.com/reel/<code>, /reels/<code>, /p/<code>, /tv/<code>, also /<user>/reel/<code>
+      const i = parts.findIndex((p) => ["reel", "reels", "p", "tv"].includes(p));
+      const id = i >= 0 ? parts[i + 1] : undefined;
+      if (!id || !IG_CODE.test(id)) return null;
+      return { provider: "instagram", id, url: `https://www.instagram.com/p/${id}/` };
     }
     case "x.com":
     case "twitter.com": {

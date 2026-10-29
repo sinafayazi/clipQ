@@ -68,6 +68,54 @@ export function CloseIcon(props: IconProps) {
   );
 }
 
+export function GripIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      {[7, 12, 17].map((y) => (
+        <g key={y}>
+          <circle cx="9" cy={y} r="1.1" fill="currentColor" stroke="none" />
+          <circle cx="15" cy={y} r="1.1" fill="currentColor" stroke="none" />
+        </g>
+      ))}
+    </Icon>
+  );
+}
+
+export function UpIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M6 14l6-6 6 6" />
+    </Icon>
+  );
+}
+
+export function DownIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M6 10l6 6 6-6" />
+    </Icon>
+  );
+}
+
+export function BanIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M6.4 6.4l11.2 11.2" />
+    </Icon>
+  );
+}
+
+export function SettingsIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="10" cy="17" r="2" />
+    </Icon>
+  );
+}
+
 export function LogoutIcon(props: IconProps) {
   return (
     <Icon {...props}>
@@ -139,6 +187,14 @@ export function ProviderIcon({ provider, ...props }: IconProps & { provider: Pro
         <Icon {...props}>
           <path d="M14 4v9.2a4.2 4.2 0 1 1-3-4" />
           <path d="M14 7.5c1.6 1.3 3.4 2 5.5 2.1V13" />
+        </Icon>
+      );
+    case "instagram":
+      return (
+        <Icon {...props}>
+          <rect x="4" y="4" width="16" height="16" rx="4.5" />
+          <circle cx="12" cy="12" r="3.6" />
+          <circle cx="16.6" cy="7.4" r="0.9" fill="currentColor" stroke="none" />
         </Icon>
       );
     case "x":

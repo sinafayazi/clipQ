@@ -77,6 +77,26 @@ const MIGRATIONS = [
     INSERT INTO sync_deletes VALUES ((SELECT seq FROM sync_clock), 'sessions', OLD.id);
   END;
   `,
+  // Per-channel bans and timeouts (clipQ only; nothing is sent to Kick).
+  `
+  CREATE TABLE bans (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id  INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    username    TEXT NOT NULL,          -- lowercase
+    user_id     INTEGER,                -- Kick user id, when we've seen it
+    until       INTEGER,                -- ms; NULL = permanent
+    created_at  INTEGER NOT NULL,
+    rev         INTEGER NOT NULL DEFAULT 1,
+    UNIQUE (channel_id, username)
+  );
+
+  ${revTriggers("bans")}
+
+  CREATE TRIGGER bans_tombstone AFTER DELETE ON bans BEGIN
+    UPDATE sync_clock SET seq = seq + 1;
+    INSERT INTO sync_deletes VALUES ((SELECT seq FROM sync_clock), 'bans', OLD.id);
+  END;
+  `,
 ];
 
 function revTriggers(table: string) {

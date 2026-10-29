@@ -7,7 +7,7 @@ import { originAllowed } from "./origin.js";
 import { lookupChannel } from "./kick/api.js";
 import type { KickChat } from "./kick/chat.js";
 import { authorizeUrl, createPkce, exchangeCode, fetchMe } from "./kick/oauth.js";
-import { settingsSchema, type QueueService } from "./queue/service.js";
+import { MAX_TIMEOUT_MS, settingsSchema, type QueueService } from "./queue/service.js";
 import type { Sessions } from "./sessions.js";
 
 const PKCE_COOKIE = "clipq_oauth";
@@ -138,7 +138,14 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions }:
   action("/api/queue/move", moveBody, (id, b) => queues.move(id, b.id, b.index));
   action("/api/queue/clear", z.unknown(), (id) => queues.clear(id));
   action("/api/settings", settingsSchema.partial(), (id, b) => queues.updateSettings(id, b));
-  action("/api/chatroom", z.object({ chatroomId: z.number().int().positive() }), (id, b) => {
+  const banBody = z.object({
+    username: z.string().trim().min(1).max(64),
+    /** null = permanent */
+    minutes: z.number().int().min(1).max(MAX_TIMEOUT_MS / 60_000).nullable(),
+  });
+  action("/api/bans", banBody, (id, b) => queues.ban(id, b.username, b.minutes === null ? null : b.minutes * 60_000) !== null);
+  action("/api/bans/remove", z.object({ username: z.string().trim().min(1).max(64) }), (id, b) => queues.unban(id, b.username));
+  action("/api/chatroom",z.object({ chatroomId: z.number().int().positive() }), (id, b) => {
     const old = queues.channel(id)?.chatroomId;
     if (old === b.chatroomId) return;
     if (old) chat.leave(old);

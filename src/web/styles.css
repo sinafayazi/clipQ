@@ -662,7 +662,7 @@ img {
 
 .clip {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   gap: 0.65rem;
   align-items: center;
   padding: 0.4rem;
@@ -755,8 +755,21 @@ img {
   overflow-wrap: break-word;
 }
 
-.clip-remove {
-  align-self: start;
+/* up / ban on top, down / remove below: two compact columns beside the thumbnail */
+.clip-actions {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 0.15rem;
+  align-self: center;
+}
+
+.clip-actions .btn-icon {
+  width: 2rem;
+  min-height: 2rem;
+}
+
+.clip-remove,
+.clip-ban {
   color: var(--color-danger-text);
 }
 
@@ -780,10 +793,13 @@ img {
 @media (max-width: 50rem) {
   .stage {
     grid-template-columns: 1fr;
+    /* rows as tall as their content; the stage scrolls instead of rows overlapping */
+    grid-auto-rows: max-content;
     overflow: auto;
   }
   .player-col {
     flex: none;
+    min-height: auto;
   }
   .player {
     flex: none;
@@ -802,11 +818,12 @@ img {
     width: 6rem;
   }
   .clip {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: auto auto minmax(0, 1fr);
   }
-  .clip-remove {
-    grid-column: 2;
-    justify-self: start;
+  .clip-actions {
+    grid-column: 3;
+    grid-template-columns: repeat(4, auto);
+    justify-content: start;
   }
 }
 
@@ -869,4 +886,209 @@ img {
     background: Highlight;
     color: HighlightText;
   }
+}
+
+/* ---- settings dialog ------------------------------------------------------ */
+
+.dialog-wide {
+  width: min(44rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+}
+
+.dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.settings-section {
+  margin-top: 1.5rem;
+}
+
+.settings-section h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.dialog .settings-hint,
+.dialog .settings-empty {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.settings-hint code {
+  font-size: 0.85em;
+  padding: 0.05em 0.35em;
+  border-radius: 5px;
+  background: var(--color-bg-sunken);
+  white-space: nowrap;
+}
+
+.platforms,
+.bans {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.platform {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--color-bg-surface);
+}
+
+.platform-name {
+  min-width: 10rem;
+}
+
+.platform-name svg {
+  flex: none;
+}
+
+.platform.off .chips {
+  opacity: 0.45;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.chip {
+  min-height: 2rem;
+  padding: 0.2rem 0.7rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-bg-sunken);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--color-accent-solid);
+  box-shadow: none;
+  color: var(--color-text-on-accent);
+}
+
+.chip:disabled {
+  cursor: not-allowed;
+}
+
+@media (hover: hover) {
+  .chip:hover:not(:disabled):not([aria-pressed="true"]) {
+    background: var(--color-bg-sunken-hover);
+  }
+}
+
+.ban-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.ban-form .field:first-child {
+  flex: 1 1 12rem;
+}
+
+.field select {
+  min-height: 2.75rem;
+  padding: 0.4rem 0.75rem;
+  border: 0;
+  border-radius: 10px;
+  background: var(--color-bg-sunken);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  font: inherit;
+}
+
+.bans li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.3rem 0.4rem 0.3rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--color-bg-surface);
+}
+
+.ban-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ban-until {
+  margin-inline-start: auto;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.ban-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+/* ---- drag to reorder ------------------------------------------------------ */
+
+.drag-handle {
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  width: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: grab;
+  /* the pointer drives the drag; don't let the browser scroll instead */
+  touch-action: none;
+}
+
+@media (hover: hover) {
+  .drag-handle:hover {
+    background: var(--color-bg-ghost-hover);
+    color: var(--color-text);
+  }
+}
+
+.clip {
+  position: relative;
+  background: var(--color-bg-chrome);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .clips.is-dragging .clip:not(.dragging) {
+    transition: transform 160ms var(--ease);
+  }
+}
+
+.clip.dragging {
+  background: var(--color-bg-raised);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.5), inset 0 0 0 1px var(--color-border);
+}
+
+.clip.dragging .drag-handle,
+.clips.is-dragging {
+  cursor: grabbing;
+}
+
+.clips.is-dragging {
+  user-select: none;
 }

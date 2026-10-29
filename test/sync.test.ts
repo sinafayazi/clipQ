@@ -144,6 +144,20 @@ describe("TursoSync", () => {
     expect(b.queues.settings(100).open).toBe(true);
   });
 
+  it("bans and unbans survive a restart", async () => {
+    const a = await boot();
+    a.queues.upsertChannel({ id: 100, slug: "erph", displayName: "Erph", chatroomId: 555 }, 100);
+    a.queues.ban(100, "alice", null);
+    a.queues.ban(100, "bob", 3_600_000);
+    await a.sync.flush();
+    a.queues.unban(100, "bob");
+    await a.sync.flush();
+
+    const b = await boot();
+    expect(b.queues.state(100, true).bans.map((x) => [x.username, x.until])).toEqual([["alice", null]]);
+    expect(b.queues.isBanned(100, "alice", null)).toBe(true);
+  });
+
   it("refuses to start when the remote is unreachable", async () => {
     const db = openDb(":memory:");
     const broken = createClient({ url: "http://127.0.0.1:9" });
