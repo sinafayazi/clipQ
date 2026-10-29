@@ -188,12 +188,23 @@ describe("playback", () => {
     expect(current()).toBe("a");
   });
 
-  it("play jumps to a queued clip; the old one goes to history", () => {
+  it("play jumps to a queued clip; the interrupted one goes back on top", () => {
     q.next(CH); // a
     const c = q.state(CH, true).queue.find((i) => i.clipId.startsWith("c"))!;
     expect(q.play(CH, c.id)).toBe(true);
     expect(current()).toBe("c");
+    expect(ids()).toEqual(["a", "b"]);
+    expect(q.state(CH, true).history).toEqual([]);
+    q.next(CH);
+    expect(current()).toBe("a");
     expect(ids()).toEqual(["b"]);
+  });
+
+  it("play with nothing playing just starts the clip", () => {
+    const b = q.state(CH, true).queue[1]!;
+    q.play(CH, b.id);
+    expect(current()).toBe("b");
+    expect(ids()).toEqual(["a", "c"]);
   });
 
   it("move reorders", () => {

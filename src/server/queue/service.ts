@@ -292,13 +292,16 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     });
   }
 
-  /** Play a specific clip now, from the queue or the history. */
+  /** Play a specific clip now, from the queue or the history. The interrupted clip goes back on top of the queue. */
   play(channelId: number, itemId: number): boolean {
     return this.tx(channelId, () => {
       const item = this.item(channelId, itemId);
       if (!item || item.status === "removed" || item.status === "playing") return item?.status === "playing";
-      this.finishCurrent(channelId, "played");
+      const current = this.currentId(channelId);
       this.db.prepare(`UPDATE items SET status = 'playing', finished_at = NULL WHERE id = ?`).run(itemId);
+      if (current !== null) {
+        this.db.prepare(`UPDATE items SET status = 'queued', position = ? WHERE id = ?`).run(this.minPosition(channelId) - 1, current);
+      }
       return true;
     });
   }
