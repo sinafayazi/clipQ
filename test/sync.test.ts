@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ClipRef } from "../src/shared/types.js";
 import type { Resolved } from "../src/server/clips/resolve.js";
 import { openDb, type Db } from "../src/server/db.js";
+import { KickBot } from "../src/server/kick/bot.js";
 import { QueueService } from "../src/server/queue/service.js";
 import { TursoSync } from "../src/server/sync.js";
 
@@ -156,6 +157,24 @@ describe("TursoSync", () => {
     const b = await boot();
     expect(b.queues.state(100, true).bans.map((x) => [x.username, x.until])).toEqual([["alice", null]]);
     expect(b.queues.isBanned(100, "alice", null)).toBe(true);
+  });
+
+  it("the bot's chat tokens survive a restart, and dropping them does too", async () => {
+    const oauth = { clientId: "c", clientSecret: "s", redirectUri: "http://x/auth/callback" };
+    const a = await boot();
+    a.queues.upsertChannel({ id: 100, slug: "erph", displayName: "Erph", chatroomId: 555 }, 100);
+    a.queues.upsertChannel({ id: 200, slug: "other", displayName: "Other", chatroomId: 666 }, 200);
+    const bot = new KickBot(a.db, oauth, quiet);
+    bot.saveTokens(100, { accessToken: "a1", refreshToken: "r1", expiresAt: 9e12 });
+    bot.saveTokens(200, { accessToken: "a2", refreshToken: "r2", expiresAt: 9e12 });
+    await a.sync.flush();
+    a.db.prepare(`DELETE FROM bot_tokens WHERE id = 200`).run();
+    await a.sync.flush();
+
+    const b = await boot();
+    expect(new KickBot(b.db, oauth, quiet).linked(100)).toBe(true);
+    expect(b.queues.state(100, true).botLinked).toBe(true);
+    expect(b.queues.state(200, true).botLinked).toBe(false);
   });
 
   it("refuses to start when the remote is unreachable", async () => {

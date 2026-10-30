@@ -64,6 +64,8 @@ export interface QueueSettings {
   autoAdvance: boolean;
   /** Per platform, who may post. A platform missing here is open to everyone. */
   access: Partial<Record<Provider, AccessGroup[]>>;
+  /** Viewer votes (`!vs`) that skip the playing clip. 0 = vote skip off. */
+  voteSkip: number;
 }
 
 export const DEFAULT_SETTINGS: QueueSettings = {
@@ -74,6 +76,7 @@ export const DEFAULT_SETTINGS: QueueSettings = {
   allowRepeats: false,
   autoAdvance: true,
   access: {},
+  voteSkip: 15,
 };
 
 /** A viewer whose links clipQ ignores, until `until` (ms) or for good when null. */
@@ -100,6 +103,10 @@ export interface QueueState {
   history: QueueItem[];
   /** Active bans and timeouts. */
   bans: Ban[];
+  /** Skip votes for the playing clip. */
+  skipVotes: number;
+  /** clipQ's bot can reply in this channel's chat (the streamer granted chat:write). */
+  botLinked: boolean;
 }
 
 /** Messages the server pushes over /ws. */

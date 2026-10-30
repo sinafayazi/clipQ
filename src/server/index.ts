@@ -7,6 +7,7 @@ import { bridgeChat } from "./bridge.js";
 import { resolveClip } from "./clips/resolve.js";
 import { config } from "./config.js";
 import { openDb } from "./db.js";
+import { KickBot } from "./kick/bot.js";
 import { KickChat } from "./kick/chat.js";
 import { QueueService } from "./queue/service.js";
 import { registerRoutes } from "./routes.js";
@@ -33,8 +34,10 @@ const queues = new QueueService(db, resolveClip);
 const sessions = new Sessions(db);
 const chat = new KickChat({ ...config.pusher, log: { info: (m) => app.log.info(m), warn: (m) => app.log.warn(m) } });
 
-bridgeChat(chat, queues, app.log);
-registerRoutes(app, { queues, chat, sessions });
+const bot = new KickBot(db, config.oauth, { info: (m) => app.log.info(m), warn: (m) => app.log.warn(m) });
+
+bridgeChat(chat, queues, bot, app.log);
+registerRoutes(app, { queues, chat, sessions, bot });
 
 // The built site. In dev, Vite serves it and proxies the API here.
 await registerSite(app, join(dirname(fileURLToPath(import.meta.url)), "../web"), sessions);

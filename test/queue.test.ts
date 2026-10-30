@@ -200,6 +200,38 @@ describe("playback", () => {
     expect(ids()).toEqual(["b"]);
   });
 
+  it("vote skip: one vote per viewer, skips at the threshold, then starts over", () => {
+    q.updateSettings(CH, { voteSkip: 3 });
+    expect(q.voteSkip(CH, 1).status).toBe("nothing_playing");
+    q.next(CH); // a
+    expect(q.voteSkip(CH, 1)).toMatchObject({ status: "counted", votes: 1, needed: 3 });
+    expect(q.voteSkip(CH, 1)).toMatchObject({ status: "already_voted", votes: 1 });
+    expect(q.voteSkip(CH, 2)).toMatchObject({ status: "counted", votes: 2 });
+    expect(q.state(CH, true).skipVotes).toBe(2);
+    expect(q.voteSkip(CH, 3)).toMatchObject({ status: "skipped", votes: 3 });
+    expect(current()).toBe("b");
+    expect(q.state(CH, true).history[0]?.status).toBe("skipped");
+    // Fresh count for the new clip; old voters can vote again.
+    expect(q.state(CH, true).skipVotes).toBe(0);
+    expect(q.voteSkip(CH, 1)).toMatchObject({ status: "counted", votes: 1 });
+  });
+
+  it("vote skip: votes don't carry over when the clip changes another way", () => {
+    q.updateSettings(CH, { voteSkip: 2 });
+    q.next(CH); // a
+    q.voteSkip(CH, 1);
+    q.next(CH); // b
+    expect(q.voteSkip(CH, 2)).toMatchObject({ status: "counted", votes: 1 });
+  });
+
+  it("vote skip: 0 turns it off; default is 15", () => {
+    expect(q.settings(CH).voteSkip).toBe(15);
+    q.updateSettings(CH, { voteSkip: 0 });
+    q.next(CH);
+    expect(q.voteSkip(CH, 1).status).toBe("off");
+    expect(current()).toBe("a");
+  });
+
   it("play with nothing playing just starts the clip", () => {
     const b = q.state(CH, true).queue[1]!;
     q.play(CH, b.id);

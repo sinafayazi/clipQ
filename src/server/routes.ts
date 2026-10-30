@@ -5,6 +5,7 @@ import type { ServerMessage } from "../shared/types.js";
 import { config } from "./config.js";
 import { originAllowed } from "./origin.js";
 import { lookupChannel } from "./kick/api.js";
+import type { KickBot } from "./kick/bot.js";
 import type { KickChat } from "./kick/chat.js";
 import { authorizeUrl, createPkce, exchangeCode, fetchMe } from "./kick/oauth.js";
 import { MAX_TIMEOUT_MS, settingsSchema, type QueueService } from "./queue/service.js";
@@ -16,9 +17,10 @@ interface Deps {
   queues: QueueService;
   chat: KickChat;
   sessions: Sessions;
+  bot: KickBot;
 }
 
-export function registerRoutes(app: FastifyInstance, { queues, chat, sessions }: Deps) {
+export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, bot }: Deps) {
   // Cookies are SameSite=Lax; also refuse cross-site writes outright.
   const publicOrigin = new URL(config.publicUrl).origin;
   app.addHook("onRequest", async (req, reply) => {
@@ -61,8 +63,8 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions }:
     if (!req.query.code || !state || !verifier || req.query.state !== state) return fail("Login expired, try again");
 
     try {
-      const token = await exchangeCode(config.oauth, req.query.code, verifier);
-      const me = await fetchMe(token);
+      const tokens = await exchangeCode(config.oauth, req.query.code, verifier);
+      const me = await fetchMe(tokens.accessToken);
       let channel;
       try {
         channel = await lookupChannel(me.slug);
@@ -73,6 +75,7 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions }:
       }
       if (channel.id !== me.userId) return fail("Channel does not belong to this account");
       login(reply, channel);
+      bot.saveTokens(channel.id, tokens);
       return reply.redirect("/app/");
     } catch (err) {
       req.log.error({ err }, "oauth callback failed");

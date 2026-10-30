@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { findClips, parseClipUrl, parseTimestamp } from "../src/server/clips/parse.js";
-import { parseDuration } from "../src/server/bridge.js";
+import { commandsText, parseDuration } from "../src/server/bridge.js";
 
 const ref = (url: string) => {
   const r = parseClipUrl(url);
@@ -153,4 +153,15 @@ describe("parseDuration", () => {
     ["10x", null],
     ["", null],
   ])("%s -> %s", (t, ms) => expect(parseDuration(t)).toBe(ms));
+});
+
+describe("commandsText", () => {
+  it("fits one Kick message and mentions the vote count", () => {
+    const t = commandsText(15);
+    expect([...t].length).toBeLessThanOrEqual(500);
+    expect(t).toContain("!vs");
+    expect(t).toContain("15 votes");
+    expect(t.startsWith("!")).toBe(false); // the bot must not trigger itself
+    expect(commandsText(0)).toContain("Vote skip is off");
+  });
 });

@@ -129,6 +129,7 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
                 {" · "}
                 {current.requestedBy.username}
                 {current.duration != null ? ` · ${formatDuration(current.duration)}` : ""}
+                {settings.voteSkip > 0 && state.skipVotes > 0 ? ` · Skip votes ${state.skipVotes}/${settings.voteSkip}` : ""}
               </p>
             </div>
           )}

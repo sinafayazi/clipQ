@@ -18,10 +18,11 @@ const TABLES = {
     "created_at", "finished_at",
   ],
   bans: ["id", "channel_id", "username", "user_id", "until", "created_at"],
+  bot_tokens: ["id", "access_token", "refresh_token", "expires_at"],
 } as const;
 type Table = keyof typeof TABLES;
 /** Parents first, so restored rows satisfy the local foreign keys. */
-const ORDER: Table[] = ["channels", "sessions", "items", "bans"];
+const ORDER: Table[] = ["channels", "sessions", "items", "bans", "bot_tokens"];
 
 const REMOTE_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS channels (id INTEGER PRIMARY KEY, slug TEXT, display_name TEXT, chatroom_id INTEGER,
@@ -33,6 +34,7 @@ const REMOTE_SCHEMA = [
      finished_at INTEGER)`,
   `CREATE TABLE IF NOT EXISTS bans (id INTEGER PRIMARY KEY, channel_id INTEGER, username TEXT, user_id INTEGER, until INTEGER,
      created_at INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS bot_tokens (id INTEGER PRIMARY KEY, access_token TEXT, refresh_token TEXT, expires_at INTEGER)`,
 ];
 
 /**
@@ -68,7 +70,7 @@ export class TursoSync {
       return;
     }
 
-    const rows: Record<Table, Record<string, unknown>[]> = { channels: [], sessions: [], items: [], bans: [] };
+    const rows: Record<Table, Record<string, unknown>[]> = { channels: [], sessions: [], items: [], bans: [], bot_tokens: [] };
     for (const t of ORDER) {
       const res = await this.remote.execute(`SELECT ${TABLES[t].join(", ")} FROM ${t}`);
       rows[t] = res.rows.map((r) => Object.fromEntries(TABLES[t].map((c) => [c, r[c] ?? null])));

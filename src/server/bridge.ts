@@ -1,11 +1,42 @@
 import type { FastifyBaseLogger } from "fastify";
+import type { Provider, QueueItem } from "../shared/types.js";
 import { findClips } from "./clips/parse.js";
+import type { KickBot } from "./kick/bot.js";
 import type { ChatMessage, KickChat } from "./kick/chat.js";
 import { MAX_TIMEOUT_MS, type QueueService } from "./queue/service.js";
 
 /** Most links taken from one message; the per-user limit usually cuts it lower. */
 const MAX_LINKS_PER_MESSAGE = 5;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+/** Votes arriving within this window get one reply with the latest count, not one reply each. */
+const VOTE_REPLY_DELAY_MS = 2500;
+/** `!cq commands` answers at most this often per channel, so viewers can't make the bot spam. */
+const HELP_COOLDOWN_MS = 30_000;
+
+/** The command list the bot posts for `!cq commands`. */
+export function commandsText(voteSkip: number): string {
+  const vote = voteSkip > 0 ? `!vs votes to skip the playing clip (${voteSkip} votes skip it).` : "Vote skip is off.";
+  return (
+    `clipQ: post a clip link in chat to add it to the queue. ${vote} ` +
+    `Mods: !cq open, !cq close, !cq next, !cq skip, !cq prev, !cq clear, !cq ban <user>, !cq timeout <user> [10m], !cq unban <user>.`
+  );
+}
+
+const PROVIDER_NAME: Record<Provider, string> = {
+  kick: "Kick",
+  youtube: "YouTube",
+  twitch: "Twitch",
+  tiktok: "TikTok",
+  instagram: "Instagram",
+  x: "X",
+  streamable: "Streamable",
+};
+
+function shortTitle(item: QueueItem): string {
+  const t = item.title?.trim();
+  if (!t) return `the ${PROVIDER_NAME[item.provider]} clip`;
+  return `"${t.length > 60 ? `${t.slice(0, 59)}…` : t}"`;
+}
 
 /** "30s", "10m", "2h", "1d", or plain minutes ("15") -> ms. Anything else -> null. */
 export function parseDuration(text: string): number | null {
@@ -18,7 +49,10 @@ export function parseDuration(text: string): number | null {
 }
 
 /** Wires Kick chat into the queues: links become requests, mod actions remove them. */
-export function bridgeChat(chat: KickChat, queues: QueueService, log: FastifyBaseLogger) {
+export function bridgeChat(chat: KickChat, queues: QueueService, bot: KickBot, log: FastifyBaseLogger) {
+  const voteReply = new Map<number, { timer: NodeJS.Timeout; text: string }>();
+  const lastHelp = new Map<number, number>();
+
   chat.on("message", (msg) => {
     onMessage(msg).catch((err) => log.error({ err }, "chat message handling failed"));
   });
@@ -57,13 +91,49 @@ export function bridgeChat(chat: KickChat, queues: QueueService, log: FastifyBas
     }
   }
 
+  /** `!vs`: one vote to skip the playing clip. The bot answers with the count. */
+  function vote(channelId: number, msg: ChatMessage) {
+    const r = queues.voteSkip(channelId, msg.sender.id);
+    if (!("item" in r) || r.status === "already_voted") return;
+    const pending = voteReply.get(channelId);
+    if (r.status === "skipped") {
+      if (pending) clearTimeout(pending.timer);
+      voteReply.delete(channelId);
+      void bot.say(channelId, `Skipped ${shortTitle(r.item)} by vote (${r.votes}/${r.needed}).`);
+      return;
+    }
+    const text = `Vote skip for ${shortTitle(r.item)}: ${r.votes}/${r.needed}. Type !vs to vote.`;
+    if (pending) {
+      pending.text = text;
+      return;
+    }
+    const timer = setTimeout(() => {
+      const reply = voteReply.get(channelId);
+      voteReply.delete(channelId);
+      // The clip may have changed while we waited; don't post a count for a clip that's gone.
+      if (reply && queues.state(channelId, false).current?.id === r.item.id) void bot.say(channelId, reply.text);
+    }, VOTE_REPLY_DELAY_MS);
+    voteReply.set(channelId, { timer, text });
+  }
+
   /**
-   * `!cq open|close|next|skip|prev|clear`, `!cq ban <user>`, `!cq timeout <user> [10m]`,
-   * `!cq unban <user>`. Broadcaster and moderators only.
+   * Anyone: `!vs` (or `!voteskip`), `!cq commands` (or `!cq help`).
+   * Broadcaster and moderators: `!cq open|close|next|skip|prev|clear`, `!cq ban <user>`,
+   * `!cq timeout <user> [10m]`, `!cq unban <user>`.
    */
   function runCommand(channelId: number, msg: ChatMessage, text: string) {
     const [cmd, arg, target, duration] = text.toLowerCase().split(/\s+/);
+    if (cmd === "!vs" || cmd === "!voteskip") return vote(channelId, msg);
     if (cmd !== "!cq" && cmd !== "!clipq") return;
+
+    if (arg === "commands" || arg === "help" || arg === undefined) {
+      const now = Date.now();
+      if (now - (lastHelp.get(channelId) ?? 0) < HELP_COOLDOWN_MS) return;
+      lastHelp.set(channelId, now);
+      void bot.say(channelId, commandsText(queues.settings(channelId).voteSkip));
+      return;
+    }
+
     const canControl = msg.sender.badges.includes("broadcaster") || msg.sender.badges.includes("moderator");
     if (!canControl) return;
 

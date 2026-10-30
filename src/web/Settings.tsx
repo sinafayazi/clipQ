@@ -94,6 +94,20 @@ export function SettingsDialog({ state, open, onClose, run }: { state: QueueStat
         </ul>
       </section>
 
+      <section className="settings-section" aria-labelledby="vote-title">
+        <h3 id="vote-title">Vote skip</h3>
+        <p className="settings-hint">
+          Viewers type <code>!vs</code> to vote to skip the playing clip; each viewer gets one vote per clip. 0 turns vote skip
+          off. <code>!cq commands</code> lists every command in chat.
+        </p>
+        <VoteSkipForm key={settings.voteSkip} value={settings.voteSkip} run={run} />
+        <p className="settings-hint">
+          {state.botLinked
+            ? "The clipQ bot replies in your chat with the vote count."
+            : "The clipQ bot can't reply in your chat yet: log out and log in again, and allow sending chat messages."}
+        </p>
+      </section>
+
       <section className="settings-section" aria-labelledby="bans-title">
         <h3 id="bans-title">Banned viewers</h3>
         <p className="settings-hint">
@@ -118,6 +132,40 @@ export function SettingsDialog({ state, open, onClose, run }: { state: QueueStat
         )}
       </section>
     </dialog>
+  );
+}
+
+function VoteSkipForm({ value, run }: { value: number; run: Run }) {
+  const [text, setText] = useState(String(value));
+  const n = Number(text);
+  const valid = text !== "" && Number.isInteger(n) && n >= 0 && n <= 1000;
+  const save = () => {
+    if (valid && n !== value) run(api.settings({ voteSkip: n }));
+  };
+  return (
+    <form
+      className="ban-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <div className="field">
+        <label htmlFor="vote-skip">Votes needed</label>
+        <input
+          id="vote-skip"
+          inputMode="numeric"
+          value={text}
+          onChange={(e) => setText(e.target.value.replace(/\D/g, "").slice(0, 4))}
+          onBlur={save}
+          aria-invalid={!valid}
+          autoComplete="off"
+        />
+      </div>
+      <button className="btn" disabled={!valid || n === value}>
+        Save
+      </button>
+    </form>
   );
 }
 

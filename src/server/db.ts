@@ -97,6 +97,23 @@ const MIGRATIONS = [
     INSERT INTO sync_deletes VALUES ((SELECT seq FROM sync_clock), 'bans', OLD.id);
   END;
   `,
+  // The streamer's Kick tokens (chat:write), so the bot can reply in their chat.
+  `
+  CREATE TABLE bot_tokens (
+    id             INTEGER PRIMARY KEY REFERENCES channels(id) ON DELETE CASCADE,  -- channel id
+    access_token   TEXT NOT NULL,
+    refresh_token  TEXT NOT NULL,
+    expires_at     INTEGER NOT NULL,     -- ms
+    rev            INTEGER NOT NULL DEFAULT 1
+  );
+
+  ${revTriggers("bot_tokens")}
+
+  CREATE TRIGGER bot_tokens_tombstone AFTER DELETE ON bot_tokens BEGIN
+    UPDATE sync_clock SET seq = seq + 1;
+    INSERT INTO sync_deletes VALUES ((SELECT seq FROM sync_clock), 'bot_tokens', OLD.id);
+  END;
+  `,
 ];
 
 function revTriggers(table: string) {

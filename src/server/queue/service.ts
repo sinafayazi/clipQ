@@ -27,7 +27,12 @@ export const settingsSchema = z.object({
   allowRepeats: z.boolean(),
   autoAdvance: z.boolean(),
   access: z.record(z.enum(PROVIDERS), z.array(z.enum(ACCESS_GROUPS)).min(1)),
+  voteSkip: z.number().int().min(0).max(1000),
 });
+
+export type VoteResult =
+  | { status: "off" | "nothing_playing" }
+  | { status: "counted" | "already_voted" | "skipped"; votes: number; needed: number; item: QueueItem };
 
 /** Longest timeout accepted, so a typo can't become a near-permanent ban. */
 export const MAX_TIMEOUT_MS = 30 * 24 * 3600 * 1000;
@@ -119,6 +124,8 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
   private deletedMessages = new RecentSet(5000);
   private recentBans = new Map<string, number>();
   private lastTicket = new Map<number, number>();
+  /** Per channel: who voted to skip which clip. Votes for any other clip are stale. */
+  private votes = new Map<number, { itemId: number; voters: Set<number> }>();
 
   constructor(
     private readonly db: Db,
@@ -192,15 +199,46 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
           .all(channelId, QUEUE, limit) as ItemRow[]
       ).map(toItem);
 
+    const current = rows(`'playing'`, "id DESC", 1)[0] ?? null;
     return {
       channel: toChannel(row),
       settings: readSettings(row.settings),
       chatConnected,
-      current: rows(`'playing'`, "id DESC", 1)[0] ?? null,
+      current,
       queue: rows(`'queued'`, "position, id"),
       history: rows(`'played','skipped'`, "finished_at DESC, id DESC", HISTORY_LIMIT),
       bans: this.bans(channelId),
+      skipVotes: current ? this.voteCount(channelId, current.id) : 0,
+      botLinked: this.db.prepare(`SELECT 1 FROM bot_tokens WHERE id = ?`).get(channelId) !== undefined,
     };
+  }
+
+  // ---- vote skip ------------------------------------------------------------------------------
+
+  /** A viewer votes to skip the playing clip; enough votes skip it. One vote per viewer per clip. */
+  voteSkip(channelId: number, userId: number): VoteResult {
+    return this.tx(channelId, () => {
+      const needed = this.settings(channelId).voteSkip;
+      if (needed === 0) return { status: "off" } as const;
+      const id = this.currentId(channelId);
+      const item = id === null ? null : this.item(channelId, id);
+      if (!item) return { status: "nothing_playing" } as const;
+
+      let v = this.votes.get(channelId);
+      if (!v || v.itemId !== item.id) this.votes.set(channelId, (v = { itemId: item.id, voters: new Set() }));
+      if (v.voters.has(userId)) return { status: "already_voted", votes: v.voters.size, needed, item } as const;
+      v.voters.add(userId);
+      const votes = v.voters.size;
+      if (votes < needed) return { status: "counted", votes, needed, item } as const;
+      this.votes.delete(channelId);
+      this.next(channelId, "skipped");
+      return { status: "skipped", votes, needed, item } as const;
+    });
+  }
+
+  private voteCount(channelId: number, itemId: number): number {
+    const v = this.votes.get(channelId);
+    return v && v.itemId === itemId ? v.voters.size : 0;
   }
 
   // ---- submissions ----------------------------------------------------------------------------
