@@ -1115,3 +1115,15 @@ img {
 .clips.is-dragging {
   user-select: none;
 }
+
+.bot-test {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.bot-test .settings-hint {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

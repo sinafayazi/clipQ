@@ -6,6 +6,7 @@ import { refreshTokens, type OAuthConfig, type Tokens } from "./oauth.js";
 // Docs: https://docs.kick.com/apis/chat
 
 const CHAT = "https://api.kick.com/public/v1/chat";
+const INTROSPECT = "https://id.kick.com/oauth/token/introspect";
 /** Refresh a little before the token runs out. */
 const REFRESH_EARLY_MS = 60_000;
 const MAX_LENGTH = 500;
@@ -44,28 +45,56 @@ export class KickBot {
 
   /** Send a chat message. Never throws; returns whether Kick accepted it. */
   async say(channelId: number, content: string): Promise<boolean> {
+    return (await this.send(channelId, content)) === null;
+  }
+
+  /** Send a chat message. Returns null when Kick accepted it, otherwise why not (for the dashboard). */
+  async send(channelId: number, content: string): Promise<string | null> {
     const text = [...content].slice(0, MAX_LENGTH).join("");
     if (!this.linked(channelId)) {
       this.log.info(`bot: not linked to channel ${channelId}, would say: ${text}`);
-      return false;
+      return this.oauth ? "Not linked: log out and log in again, and allow sending chat messages." : "Kick login isn't configured.";
     }
     try {
       let token = await this.token(channelId, false);
-      if (!token) return false;
+      if (!token) return "The Kick login expired: log out and log in again.";
       let res = await this.post(token, text);
       if (res.status === 401) {
         token = await this.token(channelId, true);
-        if (!token) return false;
+        if (!token) return "The Kick login expired: log out and log in again.";
         res = await this.post(token, text);
       }
+      const body = (await res.text()).slice(0, 300);
       if (!res.ok) {
-        this.log.warn(`bot: Kick refused the message (${res.status}): ${(await res.text()).slice(0, 200)}`);
-        return false;
+        this.log.warn(`bot: Kick refused the message (${res.status}): ${body}`);
+        return `Kick refused the message (${res.status}): ${body || res.statusText}`;
       }
-      return true;
+      // 200 can still mean "not sent".
+      if (/"is_sent"\s*:\s*false/.test(body)) {
+        this.log.warn(`bot: Kick didn't send the message: ${body}`);
+        return `Kick didn't send the message: ${body}`;
+      }
+      return null;
     } catch (err) {
       this.log.warn(`bot: sending failed: ${String(err)}`);
-      return false;
+      return `Sending failed: ${String(err)}`;
+    }
+  }
+
+  /** The scopes Kick actually granted this channel's token (null if unknown). */
+  async scopes(channelId: number): Promise<string | null> {
+    const token = await this.token(channelId, false).catch(() => null);
+    if (!token) return null;
+    try {
+      const res = await fetch(INTROSPECT, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(10_000),
+      });
+      const body = (await res.json()) as { data?: { scope?: string } };
+      return body.data?.scope ?? null;
+    } catch {
+      return null;
     }
   }
 

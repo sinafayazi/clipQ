@@ -156,6 +156,15 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, b
     chat.join(b.chatroomId);
   });
 
+  // Sends a test message as the bot and reports what Kick said, so the streamer can see why replies fail.
+  app.post("/api/bot/test", async (req, reply) => {
+    const id = authed(req, reply);
+    if (id === null) return reply;
+    const error = await bot.send(id, "clipQ bot is connected. Type !cq commands to see the commands.");
+    const scopes = error ? await bot.scopes(id) : null;
+    return { ok: error === null, error, scopes };
+  });
+
   // Dev only: pretend a chat message arrived, to test the whole pipeline without posting in Kick chat.
   if (config.devLogin) {
     const fakeChat = z.object({

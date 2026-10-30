@@ -38,6 +38,11 @@ export const api = {
   ban: (username: string, minutes: number | null) => post("/api/bans", { username, minutes }),
   unban: (username: string) => post("/api/bans/remove", { username }),
   logout: () => post("/auth/logout"),
+  async botTest(): Promise<{ ok: boolean; error: string | null; scopes: string | null }> {
+    const res = await fetch("/api/bot/test", { method: "POST" });
+    if (!res.ok) throw new ApiError(res.status, `Request failed (${res.status})`);
+    return res.json();
+  },
 };
 
 export type Connection = "connecting" | "live" | "offline" | "logged-out";

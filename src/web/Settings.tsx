@@ -106,6 +106,7 @@ export function SettingsDialog({ state, open, onClose, run }: { state: QueueStat
             ? "The clipQ bot replies in your chat with the vote count."
             : "The clipQ bot can't reply in your chat yet: log out and log in again, and allow sending chat messages."}
         </p>
+        <BotTest />
       </section>
 
       <section className="settings-section" aria-labelledby="bans-title">
@@ -132,6 +133,35 @@ export function SettingsDialog({ state, open, onClose, run }: { state: QueueStat
         )}
       </section>
     </dialog>
+  );
+}
+
+/** Posts a test message as the bot and shows Kick's answer. */
+function BotTest() {
+  const [result, setResult] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const test = async () => {
+    setBusy(true);
+    try {
+      const r = await api.botTest();
+      setResult(r.ok ? "Sent. Check your chat." : `${r.error}${r.scopes !== null ? ` (granted: ${r.scopes || "nothing"})` : ""}`);
+    } catch (e) {
+      setResult((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="bot-test">
+      <button type="button" className="btn" onClick={test} disabled={busy}>
+        {busy ? "Sending…" : "Send test message"}
+      </button>
+      {result && (
+        <p className="settings-hint" role="status">
+          {result}
+        </p>
+      )}
+    </div>
   );
 }
 
