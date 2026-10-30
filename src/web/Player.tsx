@@ -20,7 +20,7 @@ export function Player({ item, onEnded }: Props) {
     case "tiktok":
       return <TikTok id={item.clipId} onEnded={onEnded} />;
     case "instagram":
-      return <Frame src={`https://www.instagram.com/p/${enc(item.clipId)}/embed/`} />;
+      return <Instagram id={item.clipId} />;
     case "x":
       return <Frame src={`https://platform.twitter.com/embed/Tweet.html?id=${enc(item.clipId)}&theme=dark&dnt=true`} />;
     case "streamable":
@@ -29,6 +29,42 @@ export function Player({ item, onEnded }: Props) {
 }
 
 const enc = encodeURIComponent;
+
+// Instagram's embed page is a 54px header, the media at 4:5, then ~154px of likes and comments.
+// It's taller than the player, so it would scroll: size it so header and media fit, and crop the rest.
+const IG_HEADER = 54;
+const IG_FOOTER = 154;
+const IG_RATIO = 5 / 4;
+
+function Instagram({ id }: { id: string }) {
+  const host = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = host.current;
+    if (!el) return;
+    const fit = () => setWidth(Math.floor(Math.min(el.clientWidth, (el.clientHeight - IG_HEADER) / IG_RATIO)));
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const media = Math.round(width * IG_RATIO);
+  return (
+    <div ref={host} className="ig-host">
+      {width > 0 && (
+        <div className="ig-crop" style={{ width, height: IG_HEADER + media }}>
+          <iframe
+            src={`https://www.instagram.com/p/${enc(id)}/embed/`}
+            style={{ width, height: IG_HEADER + media + IG_FOOTER }}
+            scrolling="no"
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Frame({ src }: { src: string }) {
   return (

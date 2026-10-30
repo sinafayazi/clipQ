@@ -549,6 +549,24 @@ img {
   border: 0;
 }
 
+.ig-host {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.ig-crop {
+  overflow: hidden;
+}
+
+.ig-crop > iframe {
+  display: block;
+  border: 0;
+}
+
 .empty,
 .player-fallback {
   margin: auto;
@@ -804,6 +822,11 @@ img {
   .player {
     flex: none;
     aspect-ratio: 16 / 9;
+  }
+  /* Instagram is portrait: give it a tall box instead of a 16:9 strip */
+  .player:has(> .ig-host) {
+    aspect-ratio: 4 / 5;
+    max-height: 75svh;
   }
   .queue {
     overflow: visible;
