@@ -58,8 +58,6 @@ export interface QueueSettings {
   /** Max clips one viewer can have waiting at once. 0 = no limit. */
   perUserLimit: number;
   providers: Provider[];
-  /** Allow a clip that was already played since the queue was last opened. */
-  allowRepeats: boolean;
   /** Go to the next clip when one ends (Kick and YouTube only; other embeds don't report it). */
   autoAdvance: boolean;
   /** Per platform, who may post. A platform missing here is open to everyone. */
@@ -73,7 +71,6 @@ export const DEFAULT_SETTINGS: QueueSettings = {
   maxSize: 100,
   perUserLimit: 3,
   providers: [...PROVIDERS],
-  allowRepeats: false,
   autoAdvance: true,
   access: {},
   voteSkip: 15,
