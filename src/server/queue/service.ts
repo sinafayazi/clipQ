@@ -59,7 +59,6 @@ export type RejectReason =
   | "full"
   | "user_limit"
   | "duplicate"
-  | "cooldown"
   | "not_found"
   | "unplayable"
   | "moderated";
@@ -78,11 +77,7 @@ export function normalizeName(username: string): string {
 
 export type SubmitResult ={ ok: true; item: QueueItem } | { ok: false; reason: RejectReason };
 
-const QUEUE = "clips";
-/** A clip that played can't be posted again for this long after it finished; a skipped one, for less. */
-const PLAYED_COOLDOWN_MS = 30 * 60_000;
-const SKIPPED_COOLDOWN_MS = 10 * 60_000;
-const HISTORY_LIMIT = 50;
+const QUEUE = "clips";const HISTORY_LIMIT = 50;
 /** A ban this recent also drops that user's links that are still being looked up. */
 const BAN_WINDOW_MS = 60_000;
 
@@ -254,12 +249,6 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
       (this.db.prepare(`SELECT COUNT(*) AS n FROM items WHERE channel_id = ? AND queue = ? AND ${sql}`).get(channelId, QUEUE, ...args) as { n: number }).n;
 
     if (count(`provider = ? AND clip_id = ? AND status IN ('queued','playing')`, ref.provider, ref.id) > 0) return "duplicate";
-    const now = this.now();
-    const recent = count(
-      `provider = ? AND clip_id = ? AND ((status = 'played' AND finished_at > ?) OR (status = 'skipped' AND finished_at > ?))`,
-      ref.provider, ref.id, now - PLAYED_COOLDOWN_MS, now - SKIPPED_COOLDOWN_MS,
-    );
-    if (recent > 0) return "cooldown";
     if (count(`status = 'queued'`) >= s.maxSize) return "full";
     if (s.perUserLimit > 0 && count(`status = 'queued' AND requester_id = ?`, requesterId) >= s.perUserLimit) return "user_limit";
     return null;

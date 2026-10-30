@@ -49,23 +49,13 @@ describe("submit rules", () => {
     expect(await q.submit(CH, yt("a"), bob, "m3")).toEqual({ ok: false, reason: "duplicate" });
   });
 
-  it("a played clip can come back after 30 minutes", async () => {
+  it("accepts a clip again right after it played or was skipped", async () => {
     await q.submit(CH, yt("a"), alice, "m1");
     q.next(CH);
     q.next(CH); // a played
-    clock += 29 * 60_000;
-    expect(await q.submit(CH, yt("a"), bob, "m2")).toEqual({ ok: false, reason: "cooldown" });
-    clock += 2 * 60_000;
-    expect((await q.submit(CH, yt("a"), bob, "m3")).ok).toBe(true);
-  });
-
-  it("a skipped clip can come back after 10 minutes", async () => {
-    await q.submit(CH, yt("a"), alice, "m1");
+    expect((await q.submit(CH, yt("a"), bob, "m2")).ok).toBe(true);
     q.next(CH);
     q.next(CH, "skipped");
-    clock += 9 * 60_000;
-    expect(await q.submit(CH, yt("a"), bob, "m2")).toEqual({ ok: false, reason: "cooldown" });
-    clock += 2 * 60_000;
     expect((await q.submit(CH, yt("a"), bob, "m3")).ok).toBe(true);
   });
 
