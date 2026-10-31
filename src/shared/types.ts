@@ -151,6 +151,13 @@ export interface QueueState {
   skipVotes: number;
   /** clipQ's bot can reply in this channel's chat (the streamer granted chat:write). */
   botLinked: boolean;
+  /**
+   * Whether a player says the current clip / song is playing (not paused). Only one plays at a time:
+   * the other can't be started until this one is paused or done.
+   */
+  playing: { clips: boolean; songs: boolean };
+  /** The latest play/pause from a mod's chat command; players act on a new `seq`. */
+  control: PlayerControl | null;
   songs: SongsState;
 }
 
@@ -197,6 +204,15 @@ export interface PublicSongs {
   queue: PublicSong[];
   /** Null when the viewer isn't logged in. */
   me: { username: string; queued: PublicSong[]; history: PublicSong[] } | null;
+}
+
+/** A remote play/pause for one list's player. `seq` increases with every command. */
+export interface PlayerControl {
+  seq: number;
+  kind: QueueKind;
+  action: "play" | "pause";
+  /** ms; players ignore commands older than a few seconds (e.g. on page load). */
+  at: number;
 }
 
 /** Who is logged in to the dashboard, and which channels they can switch between. */

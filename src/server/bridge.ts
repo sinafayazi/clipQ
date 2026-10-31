@@ -1,5 +1,5 @@
 import type { FastifyBaseLogger } from "fastify";
-import type { Provider, QueueItem, QueueKind } from "../shared/types.js";
+import type { QueueKind } from "../shared/types.js";
 import { findClips } from "./clips/parse.js";
 import type { KickBot } from "./kick/bot.js";
 import type { ChatMessage, KickChat } from "./kick/chat.js";
@@ -20,24 +20,8 @@ export function commandsText(voteSkip: number): string {
   return (
     `clipQ: post a clip link to queue it. ${vote} ` +
     `Songs: !sr <link or name>, !song, !mysong, !wrongsong, !songs, !voteskip. ` +
-    `Mods: !cq open/close/next/skip/prev/clear, !cq ban/unban <user>, !cq timeout <user> [10m], !songs open/close/skip/clear, !songs remove <user>, !volume <0-100>.`
+    `Mods: !cq open/close/play/pause/next/skip/prev/clear, !cq ban/unban <user>, !cq timeout <user> [10m], !sr open/close/play/pause/skip/clear, !sr remove <user>, !volume <0-100>.`
   ).replace(/\s+/g, " ");
-}
-
-const PROVIDER_NAME: Record<Provider, string> = {
-  kick: "Kick",
-  youtube: "YouTube",
-  twitch: "Twitch",
-  tiktok: "TikTok",
-  instagram: "Instagram",
-  x: "X",
-  streamable: "Streamable",
-};
-
-function shortTitle(item: QueueItem): string {
-  const t = item.title?.trim();
-  if (!t) return item.queue === "songs" ? "the song" : `the ${PROVIDER_NAME[item.provider]} clip`;
-  return `"${t.length > 60 ? `${t.slice(0, 59)}…` : t}"`;
 }
 
 /** "30s", "10m", "2h", "1d", or plain minutes ("15") -> ms. Anything else -> null. */
@@ -114,11 +98,11 @@ export function bridgeChat(
     if (r.status === "skipped") {
       if (pending) clearTimeout(pending.timer);
       voteReply.delete(key);
-      void bot.say(channelId, `Skipped ${shortTitle(r.item)} by vote (${r.votes}/${r.needed}).`);
+      void bot.say(channelId, `Skipped by vote (${r.votes}/${r.needed}).`);
       return;
     }
     const command = kind === "songs" ? "!voteskip" : "!vs";
-    const text = `Vote skip for ${shortTitle(r.item)}: ${r.votes}/${r.needed}. Type ${command} to vote.`;
+    const text = `Skip vote ${r.votes}/${r.needed} (${command})`;
     if (pending) {
       pending.text = text;
       return;
@@ -136,7 +120,7 @@ export function bridgeChat(
 
   /**
    * Anyone: `!vs`, `!cq commands` (or `!cq help`).
-   * Broadcaster and moderators: `!cq open|close|next|skip|prev|clear`, `!cq ban <user>`,
+   * Broadcaster and moderators: `!cq open|close|play|pause|next|skip|prev|clear`, `!cq ban <user>`,
    * `!cq timeout <user> [10m]`, `!cq unban <user>`.
    */
   function runCommand(channelId: number, msg: ChatMessage, text: string) {
@@ -173,15 +157,22 @@ export function bridgeChat(
       case "close":
         queues.updateSettings(channelId, { open: false });
         break;
+      case "play":
+      case "pause": {
+        const why = queues.control(channelId, "clips", arg);
+        void bot.say(channelId, why ?? (arg === "play" ? "Clip playing." : "Clip paused."), msg.id);
+        break;
+      }
       case "next":
-        queues.next(channelId, "played");
-        break;
       case "skip":
-        queues.next(channelId, "skipped");
+      case "prev": {
+        // Not while a song is playing: only one plays at a time.
+        const busy = queues.busyReason(channelId, "clips");
+        if (busy) void bot.say(channelId, busy, msg.id);
+        else if (arg === "prev") queues.previous(channelId);
+        else queues.next(channelId, arg === "skip" ? "skipped" : "played");
         break;
-      case "prev":
-        queues.previous(channelId);
-        break;
+      }
       case "clear":
         queues.clear(channelId);
         break;

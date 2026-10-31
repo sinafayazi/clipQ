@@ -19,7 +19,7 @@ import {
   SkipIcon,
   UpIcon,
 } from "./icons";
-import { Player } from "./Player";
+import { Player, useAutoplay, usePlayingReport } from "./Player";
 import { useDragReorder } from "./reorder";
 import { CopyLink } from "./CopyLink";
 import { BanDialog, SettingsDialog } from "./Settings";
@@ -32,6 +32,11 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [banTarget, setBanTarget] = useState<string | null>(null);
   const me = useMe(state.editors);
+  // Only one of clip and song plays at a time: a clip that comes up while a song plays loads paused
+  // (it never starts by itself later), and its play button does nothing until the song is paused.
+  const clipStart = useAutoplay(current?.id ?? null, state.playing.songs);
+  const reportClip = usePlayingReport(current?.id ?? null, (id, playing) => api.playing("clips", id, playing), clipStart.track);
+  const clipControl = state.control?.kind === "clips" ? state.control : null;
   const [tab, setTabState] = useState<QueueKind>(() => (readTab() === "songs" ? "songs" : "clips"));
   const setTab = (t: QueueKind) => {
     setTabState(t);
@@ -56,7 +61,7 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
   const onEnded = useCallback(() => {
     if (!current || !settings.autoAdvance || advancedFor.current === current.id) return;
     advancedFor.current = current.id;
-    run(api.next());
+    run(api.next(false, "clips", current.id));
   }, [current, settings.autoAdvance, run]);
 
   const live = conn === "live" && state.chatConnected;
@@ -150,7 +155,15 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
         <section className="player-col">
           <div className="player">
             {current ? (
-              <Player key={current.id} item={current} onEnded={onEnded} />
+              <Player
+                key={current.id}
+                item={current}
+                onEnded={onEnded}
+                onPlaying={reportClip}
+                blocked={state.playing.songs}
+                autoplay={clipStart.autoplay}
+                control={clipControl}
+              />
             ) : (
               <div className="empty">
                 <h2>{settings.open ? "Waiting for clips" : "Queue is closed"}</h2>
@@ -325,6 +338,8 @@ function SongsView({
   const { current, queue, history, skipVotes, obsUrl } = state.songs;
   const s = state.settings.songs;
   const songPage = `/s/${state.channel.slug}`;
+  const songStart = useAutoplay(current?.id ?? null, state.playing.clips);
+  const reportSong = usePlayingReport(current?.id ?? null, (id, playing) => api.playing("songs", id, playing), songStart.track);
 
   // Songs always move on by themselves. `ifCurrent` stops a double skip if the OBS page also reports the end.
   const advancedFor = useRef<number | null>(null);
@@ -348,7 +363,16 @@ function SongsView({
               <CopyLink url={obsUrl} />
             </div>
           ) : current ? (
-            <Player key={current.id} item={current} onEnded={onEnded} volume={songVolume(s.volume, current.loudness, s.normalize)} />
+            <Player
+              key={current.id}
+              item={current}
+              onEnded={onEnded}
+              volume={songVolume(s.volume, current.loudness, s.normalize)}
+              onPlaying={reportSong}
+              blocked={state.playing.clips}
+              autoplay={songStart.autoplay}
+              control={state.control?.kind === "songs" ? state.control : null}
+            />
           ) : (
             <div className="empty">
               <h2>{s.open ? "Waiting for songs" : "Song requests are closed"}</h2>

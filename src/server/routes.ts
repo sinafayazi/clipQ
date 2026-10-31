@@ -241,6 +241,10 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
       const s = queues.state(channelId, false);
       const current = b.kind === "songs" ? s.songs.current : s.current;
       if (current?.id !== b.ifCurrent) return;
+    } else {
+      // Pressing Next/Skip starts the next one: not while the other list is playing.
+      const busy = queues.busyReason(channelId, b.kind);
+      if (busy) return { error: busy };
     }
     queues.next(channelId, b.skip ? "skipped" : "played", b.kind);
   };
@@ -253,13 +257,25 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
       const body = schema.safeParse(req.body ?? undefined);
       if (!body.success) return reply.code(400).send({ error: body.error.issues[0]?.message ?? "bad request" });
       const ok = run(id, body.data);
-      return ok === false ? reply.code(404).send({ error: "not found" }) : { ok: true };
+      if (ok === false) return reply.code(404).send({ error: "not found" });
+      // { error }: refused for a reason the streamer should see (e.g. the other list is playing).
+      if (ok && typeof ok === "object" && "error" in ok) return reply.code(409).send(ok);
+      return { ok: true };
     });
   };
 
   action("/api/queue/next", nextBody, advance);
-  action("/api/queue/previous", kindBody, (id, b) => queues.previous(id, b.kind));
-  action("/api/queue/play", idBody, (id, b) => queues.play(id, b.id));
+  action("/api/queue/previous", kindBody, (id, b) => {
+    const busy = queues.busyReason(id, b.kind);
+    return busy ? { error: busy } : queues.previous(id, b.kind);
+  });
+  action("/api/queue/play", idBody, (id, b) => {
+    const busy = queues.busyReason(id, queues.itemKind(id, b.id) ?? "clips");
+    return busy ? { error: busy } : queues.play(id, b.id);
+  });
+  // Players say when their item plays or pauses, so the other list knows to wait.
+  const playingBody = z.object({ kind: z.enum(["clips", "songs"]), id: z.number().int(), playing: z.boolean() });
+  action("/api/player", playingBody, (id, b) => queues.reportPlaying(id, b.kind, b.id, b.playing));
   action("/api/queue/remove", idBody, (id, b) => queues.remove(id, b.id));
   action("/api/queue/move", moveBody, (id, b) => queues.move(id, b.id, b.index));
   action("/api/queue/clear", kindBody, (id, b) => queues.clear(id, b.kind));
@@ -354,7 +370,24 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
     if (id === null) return reply.code(401).send({ error: "This OBS link is wrong or old. Copy it again from clipQ." });
     const s = queues.state(id, chat.isConnected);
     const songs = s.settings.songs;
-    return { player: songs.player, volume: songs.volume, normalize: songs.normalize, current: s.songs.current, startedAt: s.songs.startedAt };
+    return {
+      player: songs.player,
+      volume: songs.volume,
+      normalize: songs.normalize,
+      clipPlaying: s.playing.clips,
+      control: s.control,
+      current: s.songs.current,
+      startedAt: s.songs.startedAt,
+    };
+  });
+
+  app.post("/api/obs/player", async (req, reply) => {
+    const id = obsChannel(req.query);
+    if (id === null) return reply.code(401).send({ error: "bad key" });
+    const b = z.object({ id: z.number().int(), playing: z.boolean() }).safeParse(req.body);
+    if (!b.success) return reply.code(400).send({ error: "bad request" });
+    queues.reportPlaying(id, "songs", b.data.id, b.data.playing);
+    return { ok: true };
   });
 
   app.post("/api/obs/next", async (req, reply) => {

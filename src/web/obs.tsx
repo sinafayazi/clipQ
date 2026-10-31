@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { songVolume, type QueueItem } from "../shared/types";
-import { Player } from "./Player";
+import { songVolume, type PlayerControl, type QueueItem } from "../shared/types";
+import { Player, useAutoplay, usePlayingReport } from "./Player";
 import "./obs.css";
 
 // The song player as an OBS browser source. No login: the link carries the channel and a key.
@@ -15,6 +15,9 @@ interface ObsState {
   player: "dashboard" | "obs";
   volume: number;
   normalize: boolean;
+  /** A clip is playing in the dashboard: a song that hasn't started waits. */
+  clipPlaying: boolean;
+  control: PlayerControl | null;
   current: QueueItem | null;
 }
 
@@ -47,6 +50,15 @@ function ObsPlayer() {
   }, []);
 
   const current = state?.player === "obs" ? state.current : null;
+  // A song that comes up while a clip plays (or right after a paused one) loads paused; it doesn't
+  // start by itself later.
+  const start = useAutoplay(current?.id ?? null, !!state?.clipPlaying);
+  const report = usePlayingReport(
+    current?.id ?? null,
+    (id, playing) =>
+      fetch(`/api/obs/player?${auth}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, playing }) }),
+    start.track,
+  );
   const endedFor = useRef<number | null>(null);
   const onEnded = useCallback(() => {
     if (!current || endedFor.current === current.id) return;
@@ -63,7 +75,12 @@ function ObsPlayer() {
   if (!current) return null;
   return (
     <div className="player obs-player">
-      <Player key={current.id} item={current} onEnded={onEnded} volume={songVolume(state?.volume ?? 60, current.loudness, state?.normalize ?? true)} />
+      <Player key={current.id} item={current} onEnded={onEnded} volume={songVolume(state?.volume ?? 60, current.loudness, state?.normalize ?? true)}
+        onPlaying={report}
+        blocked={state?.clipPlaying}
+        autoplay={start.autoplay}
+        control={state?.control?.kind === "songs" ? state.control : null}
+      />
     </div>
   );
 }

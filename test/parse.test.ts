@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { findClips, parseClipUrl, parseTimestamp } from "../src/server/clips/parse.js";
 import { commandsText, parseDuration } from "../src/server/bridge.js";
-import { parseLoudness } from "../src/server/songs/resolve.js";
+import { parseLength, parseLoudness } from "../src/server/songs/resolve.js";
 import { songVolume } from "../src/shared/types.js";
 
 const ref = (url: string) => {
@@ -174,6 +174,12 @@ describe("song loudness", () => {
     expect(parseLoudness('..."audioConfig":{"loudnessDb":-4.6599998,"perceptualLoudnessDb":-18.66}...')).toBe(-4.66);
     expect(parseLoudness('"loudnessDb":5.71')).toBe(5.71);
     expect(parseLoudness("<html>consent page</html>")).toBeNull();
+  });
+
+  it("reads the length from the watch page", () => {
+    expect(parseLength('"videoDetails":{"videoId":"x","lengthSeconds":"213"')).toBe(213);
+    expect(parseLength('"lengthSeconds":"0"')).toBeNull(); // live streams
+    expect(parseLength("<html></html>")).toBeNull();
   });
 
   it("turns loud songs down and quiet ones up, up to 100", () => {

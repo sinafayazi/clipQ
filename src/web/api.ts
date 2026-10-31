@@ -48,6 +48,7 @@ export const api = {
     return res.json();
   },
   switchChannel: (id: number) => post("/api/session/channel", { id }),
+  playing: (kind: QueueKind, id: number, playing: boolean) => post("/api/player", { kind, id, playing }),
   addEditor: (username: string) => post("/api/editors", { username }),
   removeEditor: (username: string) => post("/api/editors/remove", { username }),
   async botTest(): Promise<{ ok: boolean; error: string | null; scopes: string | null }> {

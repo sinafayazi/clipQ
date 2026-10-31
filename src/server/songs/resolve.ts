@@ -95,7 +95,7 @@ async function byId(id: string, start: number | null): Promise<SongResolved> {
   if (embed === "missing") return { ok: false, reason: "not_found" };
   if (embed === "blocked") return { ok: false, reason: "unplayable" };
   // The player endpoint knows the length; oEmbed doesn't. If it fails, keep the song without one.
-  const [details, loudness] = await Promise.all([videoDetails(id).catch(() => null), videoLoudness(id)]);
+  const [details, page] = await Promise.all([videoDetails(id).catch(() => null), videoPage(id)]);
   if (details?.live) return { ok: false, reason: "live" };
   return {
     ok: true,
@@ -103,10 +103,10 @@ async function byId(id: string, start: number | null): Promise<SongResolved> {
       id,
       title: details?.title ?? embed.title,
       author: details?.author ?? embed.author,
-      duration: details?.duration ?? null,
+      duration: details?.duration ?? page.duration,
       thumbnail: thumb(id),
       start,
-      loudness,
+      loudness: page.loudness,
     },
   };
 }
@@ -123,7 +123,7 @@ async function search(text: string, maxDuration: number): Promise<SongResolved> 
     }
     const embed = await embeddable(r.id);
     if (typeof embed === "string") continue;
-    return { ok: true, video: { ...r, thumbnail: thumb(r.id), start: null, loudness: await videoLoudness(r.id) } };
+    return { ok: true, video: { ...r, thumbnail: thumb(r.id), start: null, loudness: (await videoPage(r.id)).loudness } };
   }
   return { ok: false, reason: tooLong ? "too_long" : "unplayable" };
 }
@@ -164,19 +164,27 @@ async function videoDetails(id: string): Promise<{ title: string; author: string
 }
 
 /**
- * How loud YouTube measured the video ("loudnessDb" in its watch page). Only the watch page has it
- * without a key. Best effort: YouTube may answer a server with a consent or bot page, then it's null.
+ * Loudness ("loudnessDb") and length from the video's watch page. The watch page is the one place
+ * that has the loudness without a key, and it's a second source for the length when the player
+ * endpoint refuses a server (it often refuses Render's). Best effort: a consent or bot page gives nulls.
  */
-async function videoLoudness(id: string): Promise<number | null> {
+async function videoPage(id: string): Promise<{ loudness: number | null; duration: number | null }> {
   try {
     const res = await fetch(`https://www.youtube.com/watch?v=${id}&hl=en`, {
       headers: { "user-agent": BROWSER_UA, "accept-language": "en" },
       signal: AbortSignal.timeout(6000),
     });
-    return res.ok ? parseLoudness(await res.text()) : null;
+    if (!res.ok) return { loudness: null, duration: null };
+    const html = await res.text();
+    return { loudness: parseLoudness(html), duration: parseLength(html) };
   } catch {
-    return null;
+    return { loudness: null, duration: null };
   }
+}
+
+export function parseLength(html: string): number | null {
+  const n = Number(html.match(/"lengthSeconds":"(\d+)"/)?.[1]);
+  return n > 0 ? n : null;
 }
 
 export function parseLoudness(html: string): number | null {

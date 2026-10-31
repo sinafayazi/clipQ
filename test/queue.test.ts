@@ -446,7 +446,7 @@ describe("song requests", () => {
         lookups.push(text);
         if (text === "missing") return { ok: false, reason: "not_found" };
         const [id, secs] = text.split(":");
-        const v = { id: id!.padEnd(11, "x"), title: `Song ${id}`, author: null, duration: secs ? Number(secs) : 180, thumbnail: "", start: null, loudness: -6 };
+        const v = { id: id!.padEnd(11, "x"), title: `Song ${id}`, author: null, duration: secs === "?" ? null : secs ? Number(secs) : 180, thumbnail: "", start: null, loudness: -6 };
         return { ok: true, video: v };
       },
       obsUrl: (id) => `http://x/obs/?c=${id}`,
@@ -523,6 +523,16 @@ describe("song requests", () => {
     expect((await req("b", alice, boss)).ok).toBe(true);
     expect((await req("c", alice, boss)).ok).toBe(true);
     expect(await req("d", alice)).toEqual({ ok: false, reason: "banned" });
+  });
+
+  it("guesses 4 minutes for songs with no known length, so wait times never go blank", async () => {
+    await req("a:?");
+    await req("b:?", bob);
+    await req("c:60", { ...bob, id: 3, username: "cara" });
+    clock += 40_000;
+    const tl = s.songTimeline(CH);
+    expect(tl.left).toBeNull(); // no real length to state for the playing song
+    expect(tl.queue.map((q) => q.startsIn)).toEqual([200, 440]);
   });
 
   it("knows when each song will start", async () => {
@@ -621,5 +631,69 @@ describe("dashboard access", () => {
   it("rejects things that aren't usernames", () => {
     expect(q.addEditor(CH, "not a name")).toBe(false);
     expect(q.addEditor(CH, "")).toBe(false);
+  });
+});
+
+describe("one plays at a time", () => {
+  let s: QueueService;
+  beforeEach(async () => {
+    s = new QueueService(openDb(":memory:"), (ref) => resolver(ref), () => clock, {
+      resolve: async (q) => ({
+        ok: true,
+        video: { id: (q.type === "search" ? q.text : "x").padEnd(11, "x"), title: "t", author: null, duration: 200, thumbnail: "", start: null, loudness: null },
+      }),
+      obsUrl: () => "",
+    });
+    s.upsertChannel({ id: CH, slug: "erph", displayName: "Erph", chatroomId: 555 }, CH);
+    s.updateSettings(CH, { open: true, perUserLimit: 0, songs: { ...s.settings(CH).songs, open: true, requestCooldown: 0, perUserLimit: 0 } });
+    await s.submit(CH, yt("a"), alice, "m1");
+    await s.submit(CH, yt("b"), alice, "m2");
+    s.next(CH); // clip a is current
+    await s.requestSong(CH, { type: "search", text: "s1" }, alice, null); // song s1 current
+  });
+
+  const song = () => s.state(CH, true).songs.current!.id;
+  const clip = () => s.state(CH, true).current!.id;
+
+  it("a playing song blocks starting clips by hand, until it's paused", () => {
+    expect(s.busyReason(CH, "clips")).toBeNull();
+    s.reportPlaying(CH, "songs", song(), true);
+    expect(s.state(CH, true).playing).toEqual({ clips: false, songs: true });
+    expect(s.busyReason(CH, "clips")).toMatch(/song is playing/);
+    expect(s.busyReason(CH, "songs")).toBeNull(); // the song's own controls still work
+    s.reportPlaying(CH, "songs", song(), false);
+    expect(s.busyReason(CH, "clips")).toBeNull();
+  });
+
+  it("and the other way round", () => {
+    s.reportPlaying(CH, "clips", clip(), true);
+    expect(s.busyReason(CH, "songs")).toMatch(/clip is playing/);
+  });
+
+  it("forgets a player that stopped reporting (closed tab)", () => {
+    s.reportPlaying(CH, "songs", song(), true);
+    clock += 16_000;
+    expect(s.busyReason(CH, "clips")).toBeNull();
+  });
+
+  it("mods' play/pause reach the players; play is refused while the other plays", () => {
+    expect(s.control(CH, "songs", "pause")).toBeNull();
+    const c1 = s.state(CH, true).control!;
+    expect([c1.kind, c1.action]).toEqual(["songs", "pause"]);
+    s.reportPlaying(CH, "songs", song(), true);
+    expect(s.control(CH, "clips", "play")).toMatch(/song is playing/);
+    expect(s.state(CH, true).control!.seq).toBe(c1.seq); // nothing new was sent
+    expect(s.control(CH, "clips", "pause")).toBeNull(); // pausing is always fine
+    s.clear(CH);
+    s.next(CH); // clip a done, nothing left
+    s.next(CH);
+    expect(s.control(CH, "clips", "pause")).toMatch(/No clip/);
+  });
+
+  it("only counts reports about what's current now", () => {
+    const first = song();
+    s.reportPlaying(CH, "songs", first, true);
+    s.next(CH, "skipped", "songs"); // song moved on; the report was about the old one
+    expect(s.state(CH, true).playing.songs).toBe(false);
   });
 });

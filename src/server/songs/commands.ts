@@ -13,8 +13,8 @@ import { parseSongQuery } from "./resolve.js";
 //   !songs                                     how many are waiting, and the song page link
 //   !voteskip                                  vote to skip the playing song
 //   !volume                                    the song volume
-// Broadcaster and moderators: !songs open|close|skip|prev|clear, !songs remove <user>,
-//   !volume <0-100> (or +10 / -10).
+// Broadcaster and moderators: !sr open|close|play|pause|skip|next|prev|clear, !sr remove <user> (also as
+//   !songs …), !volume <0-100> (or +10 / -10).
 
 /** Info commands (!song, !songs) answer at most this often per channel. */
 const INFO_COOLDOWN_MS = 10_000;
@@ -54,10 +54,11 @@ export function clock(seconds: number): string {
 }
 
 /** "plays now", "plays in about 7 min". */
+/** "plays in about 7 min", "plays in less than a minute". Empty when a song ahead has no known length. */
 export function eta(startsIn: number | null): string {
   if (startsIn === null) return "";
-  if (startsIn < 45) return "plays next";
-  return `plays in about ${Math.max(1, Math.round(startsIn / 60))} min`;
+  if (startsIn < 60) return "plays in less than a minute";
+  return `plays in about ${Math.round(startsIn / 60)} min`;
 }
 
 function title(item: QueueItem): string {
@@ -150,7 +151,7 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
     }
     const when = eta(first.startsIn);
     const more = mine.length > 1 ? ` You have ${mine.length - 1} more after it.` : "";
-    void bot.say(channel.id, `${at} ${title(first.item)} is #${first.pos}${when ? `, ${when}` : ""}.${more}`, msg.id);
+    void bot.say(channel.id, `${at} ${title(first.item)} is #${first.pos}, ${when || "time unknown (a song ahead has no length)"}.${more}`, msg.id);
   }
 
   function wrongSong(channel: ChannelInfo, msg: ChatMessage) {
@@ -196,13 +197,22 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
         void bot.say(id, arg === "open" ? "Song requests are open! Type !sr and a link or song name." : "Song requests are closed.", msg.id);
         return true;
       }
+      case "play":
+      case "pause": {
+        const why = queues.control(id, "songs", arg);
+        void bot.say(id, why ?? (arg === "play" ? "Song playing." : "Song paused."), msg.id);
+        return true;
+      }
       case "skip":
       case "next":
-        queues.next(id, arg === "skip" ? "skipped" : "played", "songs");
+      case "prev": {
+        // Not while a clip is playing: only one plays at a time.
+        const busy = queues.busyReason(id, "songs");
+        if (busy) void bot.say(id, busy, msg.id);
+        else if (arg === "prev") queues.previous(id, "songs");
+        else queues.next(id, arg === "skip" ? "skipped" : "played", "songs");
         return true;
-      case "prev":
-        queues.previous(id, "songs");
-        return true;
+      }
       case "clear":
         queues.clear(id, "songs");
         return true;
@@ -220,9 +230,13 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
     const rest = text.slice(cmdRaw.length).trim();
     switch (cmd) {
       case "!sr":
-      case "!songrequest":
+      case "!songrequest": {
+        // "!sr skip" from a mod is a control command; from anyone else it's a song called "skip".
+        const [arg, target] = restParts.map((p) => p.toLowerCase());
+        if (arg && restParts.length <= 2 && modCommand(channel, msg, arg, target)) return true;
         void request(channel, msg, rest);
         return true;
+      }
       case "!song":
       case "!np":
         nowPlaying(channel, msg);

@@ -9,6 +9,7 @@ import {
   type ChannelInfo,
   type ClipRef,
   type ItemStatus,
+  type PlayerControl,
   type Provider,
   type PublicSong,
   type PublicSongs,
@@ -124,6 +125,10 @@ const KINDS: QueueKind[] = ["clips", "songs"];
 const HISTORY_LIMIT = 50;
 /** A viewer's own song history on the song page. */
 const MY_HISTORY_LIMIT = 30;
+/** A "playing" report counts for this long; players repeat it more often than that. */
+export const PLAYING_STALE_MS = 15_000;
+/** Length assumed for a song with no known length, when working out wait times. */
+const UNKNOWN_SONG_SECONDS = 240;
 /** A ban this recent also drops that user's links that are still being looked up. */
 const BAN_WINDOW_MS = 60_000;
 
@@ -173,6 +178,14 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
   private votes = new Map<string, { itemId: number; voters: Set<number> }>();
   /** When each playing item started, for "plays in about N min". In memory: lost on restart. */
   private startedAt = new Map<number, number>();
+  /**
+   * Per "channel:list": the item a player says is actually playing (not paused), and when it last said
+   * so. Players repeat it every few seconds; a closed dashboard stops counting after PLAYING_STALE_MS.
+   */
+  private playing = new Map<string, { itemId: number; at: number; timer: NodeJS.Timeout }>();
+  /** Per channel: the latest play/pause command for the players. */
+  private controls = new Map<number, PlayerControl>();
+  private controlSeq = 0;
 
   constructor(
     private readonly db: Db,
@@ -308,6 +321,8 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
         startedAt: songs.current ? (this.startedAt.get(songs.current.id) ?? null) : null,
         obsUrl: this.songOpts.obsUrl(channelId),
       },
+      playing: { clips: this.isPlaying(channelId, "clips"), songs: this.isPlaying(channelId, "songs") },
+      control: this.controls.get(channelId) ?? null,
     };
   }
 
@@ -324,6 +339,60 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
       queue: rows(`'queued'`, "position, id"),
       history: rows(`'played','skipped'`, "finished_at DESC, id DESC", HISTORY_LIMIT),
     };
+  }
+
+  // ---- what's actually playing (clips and songs never play over each other) --------------------
+
+  /** A player reports that its item started playing (true) or paused/ended/closed (false). */
+  reportPlaying(channelId: number, kind: QueueKind, itemId: number, playing: boolean) {
+    const key = `${channelId}:${kind}`;
+    const old = this.playing.get(key);
+    const was = this.isPlaying(channelId, kind);
+    if (old) clearTimeout(old.timer);
+    if (playing) {
+      // If the reports stop (tab closed), let the other list know once this goes stale.
+      const timer = setTimeout(() => this.changed(channelId), PLAYING_STALE_MS + 100);
+      timer.unref?.();
+      this.playing.set(key, { itemId, at: this.now(), timer });
+    } else if (!old || old.itemId === itemId) {
+      this.playing.delete(key);
+    } else {
+      this.playing.set(key, old); // a stale "stopped" from an earlier item
+    }
+    if (this.isPlaying(channelId, kind) !== was) this.changed(channelId);
+  }
+
+  /** Is this list's current item playing right now (a player said so recently)? */
+  isPlaying(channelId: number, kind: QueueKind): boolean {
+    const p = this.playing.get(`${channelId}:${kind}`);
+    return !!p && this.now() - p.at < PLAYING_STALE_MS && p.itemId === this.currentId(channelId, kind);
+  }
+
+  /**
+   * Ask the players to play or pause what's current in one list (a mod's `!sr pause`). Returns why
+   * not, or null: there's nothing up, or (for play) the other list is playing.
+   */
+  control(channelId: number, kind: QueueKind, action: "play" | "pause"): string | null {
+    if (this.currentId(channelId, kind) === null) return kind === "songs" ? "No song is up right now." : "No clip is up right now.";
+    if (action === "play") {
+      const busy = this.busyReason(channelId, kind);
+      if (busy) return busy;
+    }
+    this.controls.set(channelId, { seq: ++this.controlSeq, kind, action, at: this.now() });
+    this.changed(channelId);
+    return null;
+  }
+
+  /** Which list an item is in. */
+  itemKind(channelId: number, itemId: number): QueueKind | null {
+    return this.itemRow(channelId, itemId)?.queue ?? null;
+  }
+
+  /** Why `kind` can't be started by hand right now, or null if it can: the other list is playing. */
+  busyReason(channelId: number, kind: QueueKind): string | null {
+    const other: QueueKind = kind === "clips" ? "songs" : "clips";
+    if (!this.isPlaying(channelId, other)) return null;
+    return other === "songs" ? "A song is playing. Pause it first, then play the clip." : "A clip is playing. Pause it first, then play the song.";
   }
 
   // ---- vote skip ------------------------------------------------------------------------------
@@ -520,7 +589,7 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     return this.tx(channelId, () => this.removeWhere(channelId, `id = ? AND queue = 'songs' AND status = 'queued' AND requester_id = ?`, itemId, userId) > 0);
   }
 
-  /** `!songs remove <user>`: drop everything that viewer has waiting or playing in the song list. */
+  /** `!sr remove <user>`: drop everything that viewer has waiting or playing in the song list. */
   removeSongsByName(channelId: number, username: string): number {
     return this.tx(channelId, () => this.removeWhere(channelId, `queue = 'songs' AND lower(requester_name) = ?`, normalizeName(username)));
   }
@@ -543,23 +612,23 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
    */
   songTimeline(channelId: number): { current: QueueItem | null; left: number | null; queue: { item: QueueItem; startsIn: number | null }[] } {
     const { current, queue } = this.lists(channelId, "songs");
-    let left: number | null = 0;
+    // A song YouTube gave no length for still needs a place on the clock: guess a typical song.
+    const length = (i: QueueItem) => i.duration ?? UNKNOWN_SONG_SECONDS;
+    let t = 0;
+    let left: number | null = null;
     if (current) {
       const started = this.startedAt.get(current.id);
-      left =
-        current.duration === null
-          ? null
-          : started === undefined
-            ? current.duration // unknown start (restart): assume it just began
-            : Math.max(0, current.duration - (this.now() - started) / 1000);
+      // Unknown start (after a restart): assume it just began.
+      t = started === undefined ? length(current) : Math.max(0, length(current) - (this.now() - started) / 1000);
+      // "Time left" is only stated for a song whose real length we know.
+      left = current.duration === null ? null : Math.round(t);
     }
-    let t = left;
     const out = queue.map((item) => {
-      const startsIn = t === null ? null : Math.round(t);
-      t = t === null || item.duration === null ? null : t + item.duration;
+      const startsIn = Math.round(t);
+      t += length(item);
       return { item, startsIn };
     });
-    return { current, left: left === null ? null : Math.round(left), queue: out };
+    return { current, left, queue: out };
   }
 
   /** The public song page: playing, waiting, and (if logged in) the viewer's own songs. */
