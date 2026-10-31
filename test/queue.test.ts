@@ -452,14 +452,30 @@ describe("song requests", () => {
       obsUrl: (id) => `http://x/obs/?c=${id}`,
     });
     s.upsertChannel({ id: CH, slug: "erph", displayName: "Erph", chatroomId: 555 }, CH);
-    s.updateSettings(CH, { open: true, songs: { ...s.settings(CH).songs, open: true } });
+    // No cooldown here, so the other rules can be tested back to back; it has its own test below.
+    s.updateSettings(CH, { open: true, songs: { ...s.settings(CH).songs, open: true, requestCooldown: 0 } });
+  });
+
+  it("makes a viewer wait between requests, says how long, and lets !wrongsong or mods skip the wait", async () => {
+    s.updateSettings(CH, { songs: { ...s.settings(CH).songs, requestCooldown: 120 } });
+    expect((await req("a")).ok).toBe(true);
+    clock += 30_000;
+    expect(await req("b")).toEqual({ ok: false, reason: "cooldown", retryIn: 90 });
+    expect((await req("b", bob)).ok).toBe(true); // others aren't affected
+    expect((await req("c", alice, ["moderator"])).ok).toBe(true); // mods don't wait (but it still starts a new wait)
+    clock += 121_000;
+    expect((await req("d")).ok).toBe(true);
+    // A mistake taken back with !wrongsong doesn't hold them up.
+    s.wrongSong(CH, alice.id);
+    s.wrongSong(CH, alice.id);
+    expect((await req("e")).ok).toBe(true);
   });
 
   it("are closed by default, with sensible defaults", () => {
     const fresh = new QueueService(openDb(":memory:"), resolver);
     fresh.upsertChannel({ id: 1, slug: "a", displayName: "A", chatroomId: 1 }, 1);
     expect(fresh.settings(1).songs).toEqual({
-      open: false, maxSize: 50, perUserLimit: 2, maxDuration: 600, voteSkip: 10, access: ["everyone"], player: "dashboard", volume: 60,
+      open: false, maxSize: 50, perUserLimit: 2, maxDuration: 600, voteSkip: 10, requestCooldown: 120, access: ["everyone"], player: "dashboard", volume: 60,
     });
   });
 

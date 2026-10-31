@@ -66,6 +66,8 @@ export interface SongSettings {
   maxDuration: number;
   /** `!voteskip` votes that skip the playing song. 0 = off. */
   voteSkip: number;
+  /** Seconds a viewer waits between song requests. 0 = no wait. Mods and the broadcaster don't wait. */
+  requestCooldown: number;
   /** Who may request. */
   access: AccessGroup[];
   /** Where songs play: the dashboard's Songs tab, or the OBS browser-source page. */
@@ -80,6 +82,7 @@ export const DEFAULT_SONG_SETTINGS: SongSettings = {
   perUserLimit: 2,
   maxDuration: 600,
   voteSkip: 10,
+  requestCooldown: 120,
   access: ["everyone"],
   player: "dashboard",
   volume: 60,

@@ -29,6 +29,7 @@ export const songSettingsSchema = z.object({
   perUserLimit: z.number().int().min(0).max(100),
   maxDuration: z.number().int().min(30).max(3 * 3600),
   voteSkip: z.number().int().min(0).max(1000),
+  requestCooldown: z.number().int().min(0).max(3600),
   access: z.array(z.enum(ACCESS_GROUPS)).min(1),
   player: z.enum(["dashboard", "obs"]),
   volume: z.number().int().min(0).max(100),
@@ -89,6 +90,7 @@ export type RejectReason =
   | "unplayable"
   | "too_long"
   | "live"
+  | "cooldown"
   | "moderated";
 
 /** The sender of a link, as far as the rules care. */
@@ -108,7 +110,8 @@ export function normalizeName(username: string): string {
   return username.trim().replace(/^@/, "").toLowerCase();
 }
 
-export type SubmitResult ={ ok: true; item: QueueItem } | { ok: false; reason: RejectReason };
+/** `retryIn`: for "cooldown", seconds until the viewer may request again. */
+export type SubmitResult = { ok: true; item: QueueItem } | { ok: false; reason: RejectReason; retryIn?: number };
 
 const KINDS: QueueKind[] = ["clips", "songs"];
 const HISTORY_LIMIT = 50;
@@ -367,6 +370,7 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     const count = (sql: string, ...args: unknown[]) =>
       (this.db.prepare(`SELECT COUNT(*) AS n FROM items WHERE channel_id = ? AND queue = 'songs' AND id != ? AND ${sql}`).get(channelId, replacing ?? -1, ...args) as { n: number }).n;
     if (replacing === undefined) {
+      if (this.songCooldownLeft(channelId, who) > 0) return "cooldown";
       if (count(`status = 'queued'`) >= s.maxSize) return "full";
       if (s.perUserLimit > 0 && !isBroadcaster(who) && count(`status = 'queued' AND requester_id = ?`, who.id) >= s.perUserLimit) return "user_limit";
     }
@@ -374,6 +378,21 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     if (count(`clip_id = ? AND status IN ('queued','playing')`, video.id) > 0) return "duplicate";
     if (video.duration !== null && video.duration > s.maxDuration) return "too_long";
     return null;
+  }
+
+  /**
+   * Seconds a viewer still has to wait before their next song request; 0 when they can go. Counts
+   * from their latest request that's still around, so `!wrongsong` (or a mod removing it) frees them.
+   */
+  songCooldownLeft(channelId: number, who: Viewer): number {
+    const wait = this.settings(channelId).songs.requestCooldown;
+    if (wait === 0 || isBroadcaster(who) || who.badges.includes("moderator")) return 0;
+    const { t } = this.db
+      .prepare(`SELECT MAX(created_at) AS t FROM items WHERE channel_id = ? AND queue = 'songs' AND requester_id = ? AND status != 'removed'`)
+      .get(channelId, who.id) as { t: number | null };
+    if (t === null) return 0;
+    const left = wait - (this.now() - t) / 1000;
+    return left > 0 ? Math.ceil(left) : 0;
   }
 
   /** `!sr <link or name>`. Starts right away when nothing is playing. */
@@ -385,8 +404,10 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     badges: readonly string[] = [],
   ): Promise<SubmitResult> {
     const who: Viewer = { id: requester.id, username: requester.username, badges };
+    const fail = (reason: RejectReason) =>
+      reason === "cooldown" ? { ok: false as const, reason, retryIn: this.songCooldownLeft(channelId, who) } : { ok: false as const, reason };
     const early = this.checkSong(channelId, who);
-    if (early) return { ok: false, reason: early };
+    if (early) return fail(early);
 
     const position = this.ticket(channelId, "songs");
     const found = await this.songOpts.resolve(query, this.settings(channelId).songs.maxDuration);
@@ -396,7 +417,7 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
 
     return this.tx(channelId, () => {
       const reason = this.checkSong(channelId, who, found.video);
-      if (reason) return { ok: false, reason } as const;
+      if (reason) return fail(reason);
       const v = found.video;
       const info = this.db
         .prepare(

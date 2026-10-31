@@ -32,8 +32,12 @@ const REJECT_TEXT: Partial<Record<RejectReason, string>> = {
 };
 
 /** Why a song request was turned down, in words for the viewer. Null: say nothing (banned, deleted). */
-export function rejectText(reason: RejectReason, s: SongSettings): string | null {
+export function rejectText(reason: RejectReason, s: SongSettings, retryIn?: number): string | null {
   if (reason === "too_long") return `songs can be up to ${clock(s.maxDuration)} long.`;
+  if (reason === "cooldown") {
+    const left = retryIn ?? s.requestCooldown;
+    return `wait ${left < 60 ? `${left} seconds` : clock(left)} before your next request.`;
+  }
   if (reason === "user_limit") {
     return `you already have ${s.perUserLimit} song${s.perUserLimit === 1 ? "" : "s"} waiting. Type !wrongsong to remove your last one.`;
   }
@@ -98,7 +102,7 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
       return;
     }
     if (!result.ok) {
-      const text = rejectText(result.reason, queues.settings(channel.id).songs);
+      const text = rejectText(result.reason, queues.settings(channel.id).songs, result.retryIn);
       // Banned viewers and deleted messages get no answer.
       if (text) void bot.say(channel.id, `${at} ${text}`, msg.id);
       log.debug({ channel: channel.slug, user: requester.username, reason: result.reason }, "song rejected");

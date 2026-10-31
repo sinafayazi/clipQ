@@ -233,8 +233,8 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
 
   const songChannel = (slug: string) => queues.channelBySlug(slug);
   const queryBody = z.object({ query: z.string().trim().min(1).max(300) });
-  const songFailure = (reply: FastifyReply, channelId: number, reason: RejectReason) => {
-    const text = rejectText(reason, queues.settings(channelId).songs) ?? "That song can't be added.";
+  const songFailure = (reply: FastifyReply, channelId: number, reason: RejectReason, retryIn?: number) => {
+    const text = rejectText(reason, queues.settings(channelId).songs, retryIn) ?? "That song can't be added.";
     // "You can't…" reads fine on a page, without the chat-style lowercase start.
     return reply.code(409).send({ error: text.charAt(0).toUpperCase() + text.slice(1).replace("Type !wrongsong to remove your last one.", "Remove one first.") });
   };
@@ -266,7 +266,7 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
     const q = parseSongQuery(b.query);
     if (!q) return reply.code(400).send({ error: "Paste a YouTube or Spotify link, or type the song's name." });
     const r = await queues.requestSong(channelId, q, { ...viewer, color: null }, null);
-    return r.ok ? { ok: true } : songFailure(reply, channelId, r.reason);
+    return r.ok ? { ok: true } : songFailure(reply, channelId, r.reason, r.retryIn);
   });
 
   viewerAction("/api/s/:slug/songs/:id/replace", queryBody, async (channelId, viewer, b, p, reply) => {

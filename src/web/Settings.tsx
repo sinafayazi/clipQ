@@ -234,6 +234,14 @@ function SongSettingsSection({ state, run }: { state: QueueState; run: Run }) {
           max={100}
           onSave={(n) => save({ perUserLimit: n })}
         />
+        <NumberField
+          id="song-cooldown"
+          label="Seconds between a viewer's requests (0 = no wait)"
+          value={s.requestCooldown}
+          min={0}
+          max={3600}
+          onSave={(n) => save({ requestCooldown: n })}
+        />
         <NumberField id="song-max" label="Most songs waiting" value={s.maxSize} min={1} max={1000} onSave={(n) => save({ maxSize: n })} />
         <NumberField
           id="song-vote"
