@@ -117,13 +117,13 @@ export function bridgeChat(chat: KickChat, queues: QueueService, bot: KickBot, l
   }
 
   /**
-   * Anyone: `!vs` (or `!voteskip`), `!cq commands` (or `!cq help`).
+   * Anyone: `!vs`, `!cq commands` (or `!cq help`).
    * Broadcaster and moderators: `!cq open|close|next|skip|prev|clear`, `!cq ban <user>`,
    * `!cq timeout <user> [10m]`, `!cq unban <user>`.
    */
   function runCommand(channelId: number, msg: ChatMessage, text: string) {
     const [cmd, arg, target, duration] = text.toLowerCase().split(/\s+/);
-    if (cmd === "!vs" || cmd === "!voteskip") return vote(channelId, msg);
+    if (cmd === "!vs") return vote(channelId, msg);
     if (cmd !== "!cq" && cmd !== "!clipq") return;
 
     if (arg === "commands" || arg === "help" || arg === undefined) {
