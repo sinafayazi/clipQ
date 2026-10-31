@@ -10,6 +10,7 @@ const INTROSPECT = "https://id.kick.com/oauth/token/introspect";
 /** Refresh a little before the token runs out. */
 const REFRESH_EARLY_MS = 60_000;
 const MAX_LENGTH = 500;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Log = { info: (m: string) => void; warn: (m: string) => void };
 
@@ -43,25 +44,35 @@ export class KickBot {
     return this.oauth !== null && this.row(channelId) !== undefined;
   }
 
-  /** Send a chat message. Never throws; returns whether Kick accepted it. */
-  async say(channelId: number, content: string): Promise<boolean> {
-    return (await this.send(channelId, content)) === null;
+  /**
+   * Send a chat message, as a reply to `replyTo` (a Kick message id) when given. Never throws;
+   * returns whether Kick accepted it.
+   */
+  async say(channelId: number, content: string, replyTo?: string): Promise<boolean> {
+    return (await this.send(channelId, content, replyTo)) === null;
   }
 
   /** Send a chat message. Returns null when Kick accepted it, otherwise why not (for the dashboard). */
-  async send(channelId: number, content: string): Promise<string | null> {
+  async send(channelId: number, content: string, replyTo?: string): Promise<string | null> {
     const text = [...content].slice(0, MAX_LENGTH).join("");
+    // Kick's message ids are UUIDs; anything else (dev chat) can't be replied to.
+    const reply = replyTo && UUID.test(replyTo) ? replyTo : undefined;
     if (!this.linked(channelId)) {
-      this.log.info(`bot: not linked to channel ${channelId}, would say: ${text}`);
+      this.log.info(`bot: not linked to channel ${channelId}, would ${reply ? `reply to ${reply}` : "say"}: ${text}`);
       return this.oauth ? "Not linked: log out and log in again, and allow sending chat messages." : "Kick login isn't configured.";
     }
     try {
       let token = await this.token(channelId, false);
       if (!token) return "The Kick login expired: log out and log in again.";
-      let res = await this.post(token, text);
+      let res = await this.post(token, text, reply);
       if (res.status === 401) {
         token = await this.token(channelId, true);
         if (!token) return "The Kick login expired: log out and log in again.";
+        res = await this.post(token, text, reply);
+      }
+      // The message replied to may be gone (deleted by a mod): send the answer on its own instead.
+      if (reply && (res.status === 400 || res.status === 404 || res.status === 422)) {
+        this.log.warn(`bot: Kick refused the reply (${res.status}), sending without it`);
         res = await this.post(token, text);
       }
       const body = (await res.text()).slice(0, 300);
@@ -98,11 +109,11 @@ export class KickBot {
     }
   }
 
-  private post(token: string, content: string) {
+  private post(token: string, content: string, replyTo?: string) {
     return fetch(CHAT, {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ type: "bot", content }),
+      body: JSON.stringify({ type: "bot", content, ...(replyTo ? { reply_to_message_id: replyTo } : {}) }),
       signal: AbortSignal.timeout(10_000),
     });
   }

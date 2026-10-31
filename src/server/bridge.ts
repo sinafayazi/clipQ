@@ -148,7 +148,7 @@ export function bridgeChat(
       const now = Date.now();
       if (now - (lastHelp.get(channelId) ?? 0) < HELP_COOLDOWN_MS) return;
       lastHelp.set(channelId, now);
-      void bot.say(channelId, commandsText(queues.settings(channelId).voteSkip));
+      void bot.say(channelId, commandsText(queues.settings(channelId).voteSkip), msg.id);
       return;
     }
 

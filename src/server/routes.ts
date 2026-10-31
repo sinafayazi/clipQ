@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { WebSocket } from "ws";
 import { z } from "zod";
@@ -315,7 +316,7 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
       const chatroomId = queues.channel(id)?.chatroomId;
       if (!chatroomId) return false;
       chat.emit("message", {
-        id: `dev-${Date.now()}-${Math.random()}`,
+        id: randomUUID(), // Kick's ids are UUIDs; the bot only replies to those
         chatroomId,
         content: b.content,
         sender: { id: b.userId, username: b.username, color: "#53fc18", badges: b.badges },

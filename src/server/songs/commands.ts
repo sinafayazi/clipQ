@@ -85,7 +85,7 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
     const at = `@${msg.sender.username}`;
     const query = parseSongQuery(rest);
     if (!query) {
-      void bot.say(channel.id, `${at} type !sr and a YouTube or Spotify link, or the song's name.`);
+      void bot.say(channel.id, `${at} type !sr and a YouTube or Spotify link, or the song's name.`, msg.id);
       return;
     }
     const requester = { id: msg.sender.id, username: msg.sender.username, color: msg.sender.color };
@@ -94,40 +94,40 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
       result = await queues.requestSong(channel.id, query, requester, msg.id, msg.sender.badges);
     } catch (err) {
       log.warn({ err, channel: channel.slug }, "song lookup failed");
-      void bot.say(channel.id, `${at} I couldn't look that up right now, try again in a moment.`);
+      void bot.say(channel.id, `${at} I couldn't look that up right now, try again in a moment.`, msg.id);
       return;
     }
     if (!result.ok) {
       const text = rejectText(result.reason, queues.settings(channel.id).songs);
       // Banned viewers and deleted messages get no answer.
-      if (text) void bot.say(channel.id, `${at} ${text}`);
+      if (text) void bot.say(channel.id, `${at} ${text}`, msg.id);
       log.debug({ channel: channel.slug, user: requester.username, reason: result.reason }, "song rejected");
       return;
     }
     const item = result.item;
     log.info({ channel: channel.slug, user: requester.username, song: item.clipId }, "song queued");
     if (item.status === "playing") {
-      void bot.say(channel.id, `${at} ${title(item)} is playing now.`);
+      void bot.say(channel.id, `${at} ${title(item)} is playing now.`, msg.id);
       return;
     }
     const tl = queues.songTimeline(channel.id);
     const i = tl.queue.findIndex((q) => q.item.id === item.id);
     const when = i >= 0 ? eta(tl.queue[i]!.startsIn) : "";
     const length = item.duration !== null ? ` (${clock(item.duration)})` : "";
-    void bot.say(channel.id, `${at} added ${title(item)}${length} at #${i + 1}${when ? `, ${when}` : ""}.`);
+    void bot.say(channel.id, `${at} added ${title(item)}${length} at #${i + 1}${when ? `, ${when}` : ""}.`, msg.id);
   }
 
-  function nowPlaying(channel: ChannelInfo) {
+  function nowPlaying(channel: ChannelInfo, msg: ChatMessage) {
     if (!cooled(`${channel.id}:song`, INFO_COOLDOWN_MS)) return;
     const tl = queues.songTimeline(channel.id);
     const c = tl.current;
     if (!c) {
-      void bot.say(channel.id, "No song is playing. Request one with !sr and a link or the song's name.");
+      void bot.say(channel.id, "No song is playing. Request one with !sr and a link or the song's name.", msg.id);
       return;
     }
     const left = tl.left !== null && c.duration !== null ? `, ${clock(tl.left)} left` : "";
     // No video link: clipQ reads chat for clip links and would queue the bot's own message.
-    void bot.say(channel.id, `Now playing: ${title(c)}, requested by @${c.requestedBy.username}${left}.`);
+    void bot.say(channel.id, `Now playing: ${title(c)}, requested by @${c.requestedBy.username}${left}.`, msg.id);
   }
 
   function mySong(channel: ChannelInfo, msg: ChatMessage) {
@@ -135,34 +135,34 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
     const at = `@${msg.sender.username}`;
     const tl = queues.songTimeline(channel.id);
     if (tl.current?.requestedBy.id === msg.sender.id) {
-      void bot.say(channel.id, `${at} your song ${title(tl.current)} is playing now.`);
+      void bot.say(channel.id, `${at} your song ${title(tl.current)} is playing now.`, msg.id);
       return;
     }
     const mine = tl.queue.map((q, i) => ({ ...q, pos: i + 1 })).filter((q) => q.item.requestedBy.id === msg.sender.id);
     const first = mine[0];
     if (!first) {
-      void bot.say(channel.id, `${at} you have no songs waiting. Request one with !sr.`);
+      void bot.say(channel.id, `${at} you have no songs waiting. Request one with !sr.`, msg.id);
       return;
     }
     const when = eta(first.startsIn);
     const more = mine.length > 1 ? ` You have ${mine.length - 1} more after it.` : "";
-    void bot.say(channel.id, `${at} ${title(first.item)} is #${first.pos}${when ? `, ${when}` : ""}.${more}`);
+    void bot.say(channel.id, `${at} ${title(first.item)} is #${first.pos}${when ? `, ${when}` : ""}.${more}`, msg.id);
   }
 
   function wrongSong(channel: ChannelInfo, msg: ChatMessage) {
     const removed = queues.wrongSong(channel.id, msg.sender.id);
     const at = `@${msg.sender.username}`;
-    void bot.say(channel.id, removed ? `${at} removed ${title(removed)}.` : `${at} you have no songs waiting.`);
+    void bot.say(channel.id, removed ? `${at} removed ${title(removed)}.` : `${at} you have no songs waiting.`, msg.id);
   }
 
-  function songList(channel: ChannelInfo) {
+  function songList(channel: ChannelInfo, msg: ChatMessage) {
     if (!cooled(`${channel.id}:songs`, INFO_COOLDOWN_MS)) return;
     const tl = queues.songTimeline(channel.id);
     const n = tl.queue.length;
     const total = tl.queue.reduce<number | null>((t, q) => (t === null || q.item.duration === null ? null : t + q.item.duration), 0);
     const open = queues.settings(channel.id).songs.open ? "" : " Requests are closed.";
     const count = n === 0 ? "No songs waiting." : `${n} song${n === 1 ? "" : "s"} waiting${total ? ` (${clock(total)})` : ""}.`;
-    void bot.say(channel.id, `${count}${open} See the list and your songs: ${songPage(channel)}`);
+    void bot.say(channel.id, `${count}${open} See the list and your songs: ${songPage(channel)}`, msg.id);
   }
 
   /** `!volume`: anyone sees it; mods set it with a number or a change ("!volume 40", "!volume +10"). */
@@ -171,13 +171,13 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
     const canControl = msg.sender.badges.includes("broadcaster") || msg.sender.badges.includes("moderator");
     const m = arg?.match(/^([+-]?)(\d{1,3})%?$/);
     if (!m || !canControl) {
-      if (cooled(`${channel.id}:volume`, INFO_COOLDOWN_MS)) void bot.say(channel.id, `Song volume is ${s.volume}%.`);
+      if (cooled(`${channel.id}:volume`, INFO_COOLDOWN_MS)) void bot.say(channel.id, `Song volume is ${s.volume}%.`, msg.id);
       return;
     }
     const n = Number(m[2]);
     const next = Math.max(0, Math.min(100, m[1] === "+" ? s.volume + n : m[1] === "-" ? s.volume - n : n));
     queues.updateSettings(channel.id, { songs: { ...s, volume: next } });
-    void bot.say(channel.id, `Song volume set to ${next}%.`);
+    void bot.say(channel.id, `Song volume set to ${next}%.`, msg.id);
   }
 
   function modCommand(channel: ChannelInfo, msg: ChatMessage, arg: string, target: string | undefined) {
@@ -189,7 +189,7 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
       case "close": {
         const s = queues.settings(id).songs;
         queues.updateSettings(id, { songs: { ...s, open: arg === "open" } });
-        void bot.say(id, arg === "open" ? "Song requests are open! Type !sr and a link or song name." : "Song requests are closed.");
+        void bot.say(id, arg === "open" ? "Song requests are open! Type !sr and a link or song name." : "Song requests are closed.", msg.id);
         return true;
       }
       case "skip":
@@ -221,7 +221,7 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
         return true;
       case "!song":
       case "!np":
-        nowPlaying(channel);
+        nowPlaying(channel, msg);
         return true;
       case "!mysong":
       case "!when":
@@ -240,7 +240,7 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
       case "!songs": {
         const [arg, target] = restParts.map((p) => p.toLowerCase());
         if (arg && modCommand(channel, msg, arg, target)) return true;
-        songList(channel);
+        songList(channel, msg);
         return true;
       }
     }
