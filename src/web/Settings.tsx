@@ -39,12 +39,15 @@ type Run = (p: Promise<unknown>) => void;
 export function SettingsDialog({
   state,
   kind,
+  isOwner,
   open,
   onClose,
   run,
 }: {
   state: QueueState;
   kind: QueueKind;
+  /** Only the channel's owner sees and changes who else can use this dashboard. */
+  isOwner: boolean;
   open: boolean;
   onClose: () => void;
   run: Run;
@@ -134,6 +137,8 @@ export function SettingsDialog({
 
       {kind === "songs" && <SongSettingsSection state={state} run={run} />}
 
+      {isOwner && <AccessSection editors={state.editors} run={run} />}
+
       <section className="settings-section" aria-labelledby="bot-title">
         <h3 id="bot-title">Chat bot</h3>
         <p className="settings-hint">
@@ -216,6 +221,12 @@ function SongSettingsSection({ state, run }: { state: QueueState; run: Run }) {
           <CopyLink url={state.songs.obsUrl} />
         </>
       )}
+
+      <label className="switch settings-switch">
+        <input type="checkbox" role="switch" checked={s.normalize} onChange={(e) => save({ normalize: e.target.checked })} />
+        <span className="switch-ui" />
+        Even out loudness (loud songs down, quiet songs up)
+      </label>
 
       <div className="number-grid">
         <NumberField
@@ -309,6 +320,52 @@ function NumberField({
         autoComplete="off"
       />
     </div>
+  );
+}
+
+/** Mods the owner lets into this dashboard. They log in with their own Kick account and pick this channel. */
+function AccessSection({ editors, run }: { editors: string[]; run: Run }) {
+  const [name, setName] = useState("");
+  return (
+    <section className="settings-section" aria-labelledby="access-title">
+      <h3 id="access-title">Dashboard access</h3>
+      <p className="settings-hint">
+        Let your mods control clipQ from their own computer. Add their Kick username; they log in to clipQ with their own Kick account and
+        pick your channel at the top. They can do everything here except change this list.
+      </p>
+      <form
+        className="ban-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const username = name.trim().replace(/^@/, "");
+          if (!username) return;
+          run(api.addEditor(username));
+          setName("");
+        }}
+      >
+        <div className="field">
+          <label htmlFor="editor-name">Kick username</label>
+          <input id="editor-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="username" autoComplete="off" spellCheck={false} />
+        </div>
+        <button className="btn" disabled={!name.trim()}>
+          Add
+        </button>
+      </form>
+      {editors.length === 0 ? (
+        <p className="settings-empty">Only you can use this dashboard.</p>
+      ) : (
+        <ul className="bans">
+          {editors.map((u) => (
+            <li key={u}>
+              <span className="ban-name">{u}</span>
+              <button type="button" className="btn btn-ghost" onClick={() => run(api.removeEditor(u))}>
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

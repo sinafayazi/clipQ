@@ -18,6 +18,8 @@ export interface SongVideo {
   duration: number | null;
   thumbnail: string;
   start: number | null;
+  /** YouTube's loudness measure in dB (0 is its target; negative is quieter). Null if unknown. */
+  loudness: number | null;
 }
 
 export type SongReject = "not_found" | "too_long" | "unplayable" | "live";
@@ -27,6 +29,10 @@ export type SongResolved = { ok: true; video: SongVideo } | { ok: false; reason:
 const MAX_QUERY_LENGTH = 120;
 /** Search results checked for one that can be embedded and isn't too long. */
 const SEARCH_CANDIDATES = 6;
+
+// YouTube's watch page needs a browser-like agent to include the player data. (Kick is the one that
+// rejects fake agents; YouTube doesn't.)
+const BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
 
 const INNERTUBE_CONTEXT = { client: { clientName: "WEB", clientVersion: "2.20250101.00.00", hl: "en" } };
 
@@ -89,7 +95,7 @@ async function byId(id: string, start: number | null): Promise<SongResolved> {
   if (embed === "missing") return { ok: false, reason: "not_found" };
   if (embed === "blocked") return { ok: false, reason: "unplayable" };
   // The player endpoint knows the length; oEmbed doesn't. If it fails, keep the song without one.
-  const details = await videoDetails(id).catch(() => null);
+  const [details, loudness] = await Promise.all([videoDetails(id).catch(() => null), videoLoudness(id)]);
   if (details?.live) return { ok: false, reason: "live" };
   return {
     ok: true,
@@ -100,6 +106,7 @@ async function byId(id: string, start: number | null): Promise<SongResolved> {
       duration: details?.duration ?? null,
       thumbnail: thumb(id),
       start,
+      loudness,
     },
   };
 }
@@ -116,7 +123,7 @@ async function search(text: string, maxDuration: number): Promise<SongResolved> 
     }
     const embed = await embeddable(r.id);
     if (typeof embed === "string") continue;
-    return { ok: true, video: { ...r, thumbnail: thumb(r.id), start: null } };
+    return { ok: true, video: { ...r, thumbnail: thumb(r.id), start: null, loudness: await videoLoudness(r.id) } };
   }
   return { ok: false, reason: tooLong ? "too_long" : "unplayable" };
 }
@@ -154,6 +161,28 @@ async function videoDetails(id: string): Promise<{ title: string; author: string
     // A stream that's live now has no length; a finished stream (isLiveContent) plays like a video.
     live: v.isLive === true || (v.isLiveContent === true && !(seconds > 0)),
   };
+}
+
+/**
+ * How loud YouTube measured the video ("loudnessDb" in its watch page). Only the watch page has it
+ * without a key. Best effort: YouTube may answer a server with a consent or bot page, then it's null.
+ */
+async function videoLoudness(id: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://www.youtube.com/watch?v=${id}&hl=en`, {
+      headers: { "user-agent": BROWSER_UA, "accept-language": "en" },
+      signal: AbortSignal.timeout(6000),
+    });
+    return res.ok ? parseLoudness(await res.text()) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function parseLoudness(html: string): number | null {
+  const m = html.match(/"loudnessDb":(-?\d+(?:\.\d+)?)/);
+  const n = m ? Number(m[1]) : NaN;
+  return Number.isFinite(n) && Math.abs(n) < 60 ? Math.round(n * 100) / 100 : null;
 }
 
 interface SearchResult {

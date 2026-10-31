@@ -446,7 +446,7 @@ describe("song requests", () => {
         lookups.push(text);
         if (text === "missing") return { ok: false, reason: "not_found" };
         const [id, secs] = text.split(":");
-        const v = { id: id!.padEnd(11, "x"), title: `Song ${id}`, author: null, duration: secs ? Number(secs) : 180, thumbnail: "", start: null };
+        const v = { id: id!.padEnd(11, "x"), title: `Song ${id}`, author: null, duration: secs ? Number(secs) : 180, thumbnail: "", start: null, loudness: -6 };
         return { ok: true, video: v };
       },
       obsUrl: (id) => `http://x/obs/?c=${id}`,
@@ -475,7 +475,7 @@ describe("song requests", () => {
     const fresh = new QueueService(openDb(":memory:"), resolver);
     fresh.upsertChannel({ id: 1, slug: "a", displayName: "A", chatroomId: 1 }, 1);
     expect(fresh.settings(1).songs).toEqual({
-      open: false, maxSize: 50, perUserLimit: 2, maxDuration: 600, voteSkip: 10, requestCooldown: 120, access: ["everyone"], player: "dashboard", volume: 60,
+      open: false, maxSize: 50, perUserLimit: 2, maxDuration: 600, voteSkip: 10, requestCooldown: 120, access: ["everyone"], player: "dashboard", volume: 60, normalize: true,
     });
   });
 
@@ -589,5 +589,37 @@ describe("song requests", () => {
     db.prepare(`UPDATE channels SET settings = ? WHERE id = 1`).run(JSON.stringify({ open: true, voteSkip: 5 }));
     expect(fresh.settings(1).voteSkip).toBe(5);
     expect(fresh.settings(1).songs.maxDuration).toBe(600);
+  });
+});
+
+describe("dashboard access", () => {
+  const owner = { userId: CH, username: "erph" };
+  const mod = { userId: 42, username: "modguy" };
+
+  it("the owner always controls their channel; others only while on the access list", () => {
+    expect(q.canControl(CH, owner)).toBe("owner");
+    expect(q.canControl(CH, { userId: null, username: null })).toBe("owner"); // sessions from before mods existed
+    expect(q.canControl(CH, mod)).toBeNull();
+    expect(q.addEditor(CH, "@ModGuy")).toBe(true);
+    expect(q.state(CH, true).editors).toEqual(["modguy"]);
+    expect(q.canControl(CH, mod)).toBe("editor");
+    expect(q.channelsFor(mod).map((c) => [c.slug, c.role])).toEqual([["erph", "editor"]]);
+    expect(q.removeEditor(CH, "modguy")).toBe(true);
+    expect(q.canControl(CH, mod)).toBeNull();
+    expect(q.channelsFor(mod)).toEqual([]);
+  });
+
+  it("lists a mod's own channel first, then the ones they help with", () => {
+    q.upsertChannel({ id: 42, slug: "modguy", displayName: "ModGuy", chatroomId: 9 }, 42);
+    q.addEditor(CH, "modguy");
+    expect(q.channelsFor(mod).map((c) => [c.slug, c.role])).toEqual([
+      ["modguy", "owner"],
+      ["erph", "editor"],
+    ]);
+  });
+
+  it("rejects things that aren't usernames", () => {
+    expect(q.addEditor(CH, "not a name")).toBe(false);
+    expect(q.addEditor(CH, "")).toBe(false);
   });
 });

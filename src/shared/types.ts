@@ -45,6 +45,8 @@ export interface QueueItem {
   duration: number | null;
   /** Direct media URL (Kick clips are HLS). */
   mediaUrl: string | null;
+  /** Songs: YouTube's loudness measure in dB (negative is quieter than its target). */
+  loudness: number | null;
   requestedBy: Requester;
   status: ItemStatus;
   createdAt: number;
@@ -74,6 +76,8 @@ export interface SongSettings {
   player: "dashboard" | "obs";
   /** Song volume, 0–100. Mods can change it from chat with `!volume`. */
   volume: number;
+  /** Turn quiet songs up so they match the rest (as far as the player's 100% allows). */
+  normalize: boolean;
 }
 
 export const DEFAULT_SONG_SETTINGS: SongSettings = {
@@ -86,6 +90,7 @@ export const DEFAULT_SONG_SETTINGS: SongSettings = {
   access: ["everyone"],
   player: "dashboard",
   volume: 60,
+  normalize: true,
 };
 
 export interface QueueSettings {
@@ -140,6 +145,8 @@ export interface QueueState {
   history: QueueItem[];
   /** Active bans and timeouts. */
   bans: Ban[];
+  /** Kick usernames (lowercase) of mods the owner lets into this dashboard. */
+  editors: string[];
   /** Skip votes for the playing clip. */
   skipVotes: number;
   /** clipQ's bot can reply in this channel's chat (the streamer granted chat:write). */
@@ -157,6 +164,16 @@ export interface SongsState {
   startedAt: number | null;
   /** The OBS browser-source page for this channel (secret: it can skip songs). */
   obsUrl: string;
+}
+
+/**
+ * The player volume for a song: the song volume moved by YouTube's loudness measure, so every song
+ * lands near the same level (loud ones down, quiet ones up). The embedded player doesn't do this
+ * itself. Quiet songs can only go up to the player's 100%.
+ */
+export function songVolume(volume: number, loudness: number | null, normalize: boolean): number {
+  if (!normalize || loudness === null) return volume;
+  return Math.max(0, Math.min(100, Math.round(volume * 10 ** (-loudness / 20))));
 }
 
 /** A queued song with its place in line, for the public song list. */
@@ -180,6 +197,14 @@ export interface PublicSongs {
   queue: PublicSong[];
   /** Null when the viewer isn't logged in. */
   me: { username: string; queued: PublicSong[]; history: PublicSong[] } | null;
+}
+
+/** Who is logged in to the dashboard, and which channels they can switch between. */
+export interface DashboardUser {
+  username: string | null;
+  /** Their role in the channel they're looking at. Only the owner manages the access list. */
+  role: "owner" | "editor";
+  channels: (ChannelInfo & { role: "owner" | "editor" })[];
 }
 
 /** Messages the server pushes over /ws. */

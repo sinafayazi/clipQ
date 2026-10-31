@@ -11,18 +11,19 @@ import type { Db } from "./db.js";
 
 const TABLES = {
   channels: ["id", "slug", "display_name", "chatroom_id", "owner_id", "settings", "opened_at", "created_at"],
-  sessions: ["id", "channel_id", "expires_at"],
+  sessions: ["id", "channel_id", "expires_at", "user_id", "username"],
   items: [
     "id", "channel_id", "queue", "provider", "clip_id", "url", "start", "title", "thumbnail", "author", "duration",
     "media_url", "requester_id", "requester_name", "requester_color", "message_id", "status", "position",
-    "created_at", "finished_at",
+    "created_at", "finished_at", "loudness",
   ],
   bans: ["id", "channel_id", "username", "user_id", "until", "created_at"],
   bot_tokens: ["id", "access_token", "refresh_token", "expires_at"],
+  channel_editors: ["id", "channel_id", "username", "created_at"],
 } as const;
 type Table = keyof typeof TABLES;
 /** Parents first, so restored rows satisfy the local foreign keys. */
-const ORDER: Table[] = ["channels", "sessions", "items", "bans", "bot_tokens"];
+const ORDER: Table[] = ["channels", "sessions", "items", "bans", "bot_tokens", "channel_editors"];
 
 const REMOTE_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS channels (id INTEGER PRIMARY KEY, slug TEXT, display_name TEXT, chatroom_id INTEGER,
@@ -35,6 +36,14 @@ const REMOTE_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS bans (id INTEGER PRIMARY KEY, channel_id INTEGER, username TEXT, user_id INTEGER, until INTEGER,
      created_at INTEGER)`,
   `CREATE TABLE IF NOT EXISTS bot_tokens (id INTEGER PRIMARY KEY, access_token TEXT, refresh_token TEXT, expires_at INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS channel_editors (id INTEGER PRIMARY KEY, channel_id INTEGER, username TEXT, created_at INTEGER)`,
+];
+
+/** Columns added to remote tables after they were first created. Each fails harmlessly once it's there. */
+const REMOTE_COLUMNS = [
+  `ALTER TABLE sessions ADD COLUMN user_id INTEGER`,
+  `ALTER TABLE sessions ADD COLUMN username TEXT`,
+  `ALTER TABLE items ADD COLUMN loudness REAL`,
 ];
 
 /**
@@ -64,13 +73,20 @@ export class TursoSync {
    */
   async init() {
     await this.remote.batch(REMOTE_SCHEMA, "write");
+    for (const sql of REMOTE_COLUMNS) {
+      try {
+        await this.remote.execute(sql);
+      } catch (err) {
+        if (!/duplicate column/i.test(String(err))) throw err;
+      }
+    }
     const localRows = (this.db.prepare(`SELECT COUNT(*) AS n FROM channels`).get() as { n: number }).n;
     if (localRows > 0) {
       this.log.info("turso: local database has data, keeping it and pushing changes");
       return;
     }
 
-    const rows: Record<Table, Record<string, unknown>[]> = { channels: [], sessions: [], items: [], bans: [], bot_tokens: [] };
+    const rows: Record<Table, Record<string, unknown>[]> = { channels: [], sessions: [], items: [], bans: [], bot_tokens: [], channel_editors: [] };
     for (const t of ORDER) {
       const res = await this.remote.execute(`SELECT ${TABLES[t].join(", ")} FROM ${t}`);
       rows[t] = res.rows.map((r) => Object.fromEntries(TABLES[t].map((c) => [c, r[c] ?? null])));
@@ -82,7 +98,7 @@ export class TursoSync {
         const insert = this.db.prepare(`INSERT INTO ${t} (${cols.join(", ")}) VALUES (${cols.map((c) => "@" + c).join(", ")})`);
         for (const row of rows[t]) insert.run(row);
       }
-      for (const t of ["items", "bans"] as const) {
+      for (const t of ["items", "bans", "channel_editors"] as const) {
         const maxId = rows[t].reduce((m, r) => Math.max(m, Number(r.id)), 0);
         this.db.prepare(`DELETE FROM sqlite_sequence WHERE name = ?`).run(t);
         this.db.prepare(`INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)`).run(t, maxId + ID_GAP);

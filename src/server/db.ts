@@ -124,6 +124,32 @@ const MIGRATIONS = [
     expires_at  INTEGER NOT NULL
   );
   `,
+  // Mods a streamer lets into their dashboard, and who each dashboard session belongs to (a session's
+  // channel_id is the channel being controlled, which for a mod isn't their own).
+  `
+  ALTER TABLE sessions ADD COLUMN user_id INTEGER;   -- NULL: an older session, always the owner's
+  ALTER TABLE sessions ADD COLUMN username TEXT;
+
+  CREATE TABLE channel_editors (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id  INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    username    TEXT NOT NULL,          -- lowercase Kick username
+    created_at  INTEGER NOT NULL,
+    rev         INTEGER NOT NULL DEFAULT 1,
+    UNIQUE (channel_id, username)
+  );
+
+  ${revTriggers("channel_editors")}
+
+  CREATE TRIGGER channel_editors_tombstone AFTER DELETE ON channel_editors BEGIN
+    UPDATE sync_clock SET seq = seq + 1;
+    INSERT INTO sync_deletes VALUES ((SELECT seq FROM sync_clock), 'channel_editors', OLD.id);
+  END;
+  `,
+  // How loud YouTube measured each song (dB), so quiet ones can be turned up.
+  `
+  ALTER TABLE items ADD COLUMN loudness REAL;
+  `,
 ];
 
 function revTriggers(table: string) {

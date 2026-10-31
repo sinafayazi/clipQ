@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { QueueItem } from "../shared/types";
+import { songVolume, type QueueItem } from "../shared/types";
 import { Player } from "./Player";
 import "./obs.css";
 
@@ -14,6 +14,7 @@ const auth = `c=${encodeURIComponent(params.get("c") ?? "")}&k=${encodeURICompon
 interface ObsState {
   player: "dashboard" | "obs";
   volume: number;
+  normalize: boolean;
   current: QueueItem | null;
 }
 
@@ -62,7 +63,7 @@ function ObsPlayer() {
   if (!current) return null;
   return (
     <div className="player obs-player">
-      <Player key={current.id} item={current} onEnded={onEnded} volume={state?.volume} />
+      <Player key={current.id} item={current} onEnded={onEnded} volume={songVolume(state?.volume ?? 60, current.loudness, state?.normalize ?? true)} />
     </div>
   );
 }

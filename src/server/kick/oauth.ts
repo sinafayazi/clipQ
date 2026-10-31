@@ -93,7 +93,7 @@ export async function fetchUser(accessToken: string): Promise<{ id: number; user
 }
 
 /** The logged-in user's id and channel slug. */
-export async function fetchMe(accessToken: string): Promise<{ userId: number; slug: string }> {
+export async function fetchMe(accessToken: string): Promise<{ userId: number; username: string; slug: string }> {
   const auth = { authorization: `Bearer ${accessToken}` };
   const users = await getJson<{ data: { user_id: number; name: string }[] }>(`${API}/users`, { headers: auth });
   const user = users.data[0];
@@ -102,5 +102,5 @@ export async function fetchMe(accessToken: string): Promise<{ userId: number; sl
     headers: auth,
   });
   const channel = channels.data.find((c) => c.broadcaster_user_id === user.user_id) ?? channels.data[0];
-  return { userId: user.user_id, slug: channel?.slug ?? user.name.toLowerCase() };
+  return { userId: user.user_id, username: user.name, slug: channel?.slug ?? user.name.toLowerCase() };
 }

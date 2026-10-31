@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { WebSocket } from "ws";
 import { z } from "zod";
-import type { ServerMessage } from "../shared/types.js";
+import type { DashboardUser, ServerMessage } from "../shared/types.js";
 import { config } from "./config.js";
 import { originAllowed } from "./origin.js";
 import { lookupChannel } from "./kick/api.js";
@@ -10,7 +10,7 @@ import type { KickBot } from "./kick/bot.js";
 import type { KickChat } from "./kick/chat.js";
 import { authorizeUrl, createPkce, exchangeCode, fetchMe, fetchUser, VIEWER_SCOPES } from "./kick/oauth.js";
 import { MAX_TIMEOUT_MS, settingsSchema, songSettingsSchema, type QueueService, type RejectReason } from "./queue/service.js";
-import type { Sessions, ViewerSessions } from "./sessions.js";
+import type { Session, Sessions, ViewerSessions } from "./sessions.js";
 import { rejectText } from "./songs/commands.js";
 import { obsKeyValid } from "./songs/obs.js";
 import { parseSongQuery } from "./songs/resolve.js";
@@ -34,12 +34,12 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
     if (origin && !originAllowed(origin, publicOrigin)) return reply.code(403).send({ error: "bad origin" });
   });
 
-  /** Log a channel in: save it, join its chat, start a session. */
-  function login(reply: FastifyReply, channel: Awaited<ReturnType<typeof lookupChannel>>) {
+  /** Log a channel's owner in: save the channel, join its chat, start a session on it. */
+  function login(reply: FastifyReply, channel: Awaited<ReturnType<typeof lookupChannel>>, username: string) {
     queues.upsertChannel(channel, channel.id);
     const saved = queues.channel(channel.id)!;
     if (saved.chatroomId) chat.join(saved.chatroomId);
-    sessions.create(reply, channel.id);
+    sessions.create(reply, channel.id, { id: channel.id, username });
   }
 
   // ---- auth -----------------------------------------------------------------------------------
@@ -116,7 +116,7 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
         channel = { id: me.userId, slug: me.slug, displayName: me.slug, chatroomId: null };
       }
       if (channel.id !== me.userId) return fail("Channel does not belong to this account");
-      login(reply, channel);
+      login(reply, channel, me.username);
       bot.saveTokens(channel.id, tokens);
       return reply.redirect("/app/");
     } catch (err) {
@@ -125,12 +125,19 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
     }
   });
 
-  app.get<{ Querystring: { slug?: string } }>("/auth/dev", async (req, reply) => {
+  // Dev: log in as a channel's owner, or with ?as=<name> as that (made-up) user, who then needs to be
+  // on the channel's dashboard access list, like a mod.
+  app.get<{ Querystring: { slug?: string; as?: string } }>("/auth/dev", async (req, reply) => {
     if (!config.devLogin) return reply.code(404).send();
     const slug = req.query.slug?.trim().toLowerCase();
     if (!slug) return reply.code(400).send("slug required");
     try {
-      login(reply, await lookupChannel(slug));
+      const channel = await lookupChannel(slug);
+      const as = req.query.as?.trim().toLowerCase();
+      if (as) {
+        queues.upsertChannel(channel, channel.id);
+        sessions.create(reply, channel.id, { id: 800_000_000 + [...as].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 99_999_999, 7), username: as });
+      } else login(reply, channel, slug);
     } catch (err) {
       req.log.error({ err }, "dev login failed");
       return reply.redirect(`/app/?error=${encodeURIComponent(`Couldn't find channel "${slug}"`)}`);
@@ -145,14 +152,68 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
 
   // ---- queue API (session required) -----------------------------------------------------------
 
+  /**
+   * The channel this request may control, or null (401 sent). A mod the owner took off the access list
+   * lands back on their own channel, or is logged out if they have none here.
+   */
+  const access = (req: FastifyRequest): { session: Session; channelId: number; role: "owner" | "editor" } | null => {
+    const session = sessions.get(req);
+    if (!session) return null;
+    const role = queues.canControl(session.channelId, session);
+    if (role) return { session, channelId: session.channelId, role };
+    const own = queues.channelsFor(session).find((c) => c.role === "owner");
+    if (!own) return null;
+    sessions.setChannel(session.id, own.id);
+    return { session: { ...session, channelId: own.id }, channelId: own.id, role: "owner" };
+  };
+
   const authed = (req: FastifyRequest, reply: FastifyReply): number | null => {
-    const id = sessions.channelId(req);
-    if (id === null || !queues.channel(id)) {
+    const a = access(req);
+    if (!a) {
       reply.code(401).send({ error: "not logged in" });
       return null;
     }
-    return id;
+    return a.channelId;
   };
+
+  /** Who's logged in, their role here, and the channels they can switch to. */
+  app.get("/api/me", async (req, reply) => {
+    const a = access(req);
+    if (!a) return reply.code(401).send({ error: "not logged in" });
+    const me: DashboardUser = { username: a.session.username, role: a.role, channels: queues.channelsFor(a.session) };
+    return me;
+  });
+
+  app.post("/api/session/channel", async (req, reply) => {
+    const a = access(req);
+    if (!a) return reply.code(401).send({ error: "not logged in" });
+    const b = z.object({ id: z.number().int() }).safeParse(req.body);
+    if (!b.success) return reply.code(400).send({ error: "bad request" });
+    if (!queues.canControl(b.data.id, a.session)) return reply.code(403).send({ error: "You can't control that channel." });
+    sessions.setChannel(a.session.id, b.data.id);
+    return { ok: true };
+  });
+
+  /** The access list: the owner adds or removes mods. A removed mod's open dashboards are dropped. */
+  const editorBody = z.object({ username: z.string().trim().min(1).max(40) });
+  app.post("/api/editors", async (req, reply) => {
+    const a = access(req);
+    if (!a) return reply.code(401).send({ error: "not logged in" });
+    if (a.role !== "owner") return reply.code(403).send({ error: "Only the channel owner can change who has access." });
+    const b = editorBody.safeParse(req.body);
+    if (!b.success || !queues.addEditor(a.channelId, b.data.username)) return reply.code(400).send({ error: "That isn't a Kick username." });
+    return { ok: true };
+  });
+  app.post("/api/editors/remove", async (req, reply) => {
+    const a = access(req);
+    if (!a) return reply.code(401).send({ error: "not logged in" });
+    if (a.role !== "owner") return reply.code(403).send({ error: "Only the channel owner can change who has access." });
+    const b = editorBody.safeParse(req.body);
+    if (!b.success) return reply.code(400).send({ error: "bad request" });
+    queues.removeEditor(a.channelId, b.data.username);
+    dropRevoked(a.channelId);
+    return { ok: true };
+  });
 
   app.get("/api/state", async (req, reply) => {
     const id = authed(req, reply);
@@ -292,7 +353,8 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
     const id = obsChannel(req.query);
     if (id === null) return reply.code(401).send({ error: "This OBS link is wrong or old. Copy it again from clipQ." });
     const s = queues.state(id, chat.isConnected);
-    return { player: s.settings.songs.player, volume: s.settings.songs.volume, current: s.songs.current, startedAt: s.songs.startedAt };
+    const songs = s.settings.songs;
+    return { player: songs.player, volume: songs.volume, normalize: songs.normalize, current: s.songs.current, startedAt: s.songs.startedAt };
   });
 
   app.post("/api/obs/next", async (req, reply) => {
@@ -327,7 +389,17 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
   // ---- realtime -------------------------------------------------------------------------------
 
   const sockets = new Map<number, Set<WebSocket>>();
+  /** Who opened each socket, so a mod taken off the access list can be dropped. */
+  const socketUser = new WeakMap<WebSocket, Session>();
   const pending = new Set<number>();
+
+  /** Close the dashboards of anyone who can no longer control this channel; they reconnect elsewhere. */
+  function dropRevoked(channelId: number) {
+    for (const ws of sockets.get(channelId) ?? []) {
+      const user = socketUser.get(ws);
+      if (user && !queues.canControl(channelId, user)) ws.close(4403, "access removed");
+    }
+  }
 
   const push = (channelId: number) => {
     const set = sockets.get(channelId);
@@ -348,11 +420,13 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
   });
 
   app.get("/ws", { websocket: true }, (socket, req) => {
-    const channelId = sessions.channelId(req);
-    if (channelId === null || !queues.channel(channelId)) {
+    const a = access(req);
+    if (!a) {
       socket.close(4401, "not logged in");
       return;
     }
+    const channelId = a.channelId;
+    socketUser.set(socket, a.session);
     let set = sockets.get(channelId);
     if (!set) sockets.set(channelId, (set = new Set()));
     set.add(socket);

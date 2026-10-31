@@ -33,6 +33,7 @@ export const songSettingsSchema = z.object({
   access: z.array(z.enum(ACCESS_GROUPS)).min(1),
   player: z.enum(["dashboard", "obs"]),
   volume: z.number().int().min(0).max(100),
+  normalize: z.boolean(),
 });
 
 export const settingsSchema = z.object({
@@ -105,6 +106,12 @@ function isBroadcaster(who: Viewer) {
   return who.badges.includes("broadcaster");
 }
 
+/** Who is logged in to a dashboard. A null user is a session from before mods could log in: the owner. */
+export interface DashboardLogin {
+  userId: number | null;
+  username: string | null;
+}
+
 /** Kick usernames are case-insensitive; people also type them with an @. */
 export function normalizeName(username: string): string {
   return username.trim().replace(/^@/, "").toLowerCase();
@@ -133,6 +140,7 @@ interface ItemRow {
   author: string | null;
   duration: number | null;
   media_url: string | null;
+  loudness: number | null;
   requester_id: number;
   requester_name: string;
   requester_color: string | null;
@@ -212,6 +220,55 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     return row ? toChannel(row) : null;
   }
 
+  // ---- dashboard access (mods the streamer lets into their dashboard) ---------------------------
+
+  editors(channelId: number): string[] {
+    return (this.db.prepare(`SELECT username FROM channel_editors WHERE channel_id = ? ORDER BY username`).all(channelId) as { username: string }[]).map(
+      (r) => r.username,
+    );
+  }
+
+  addEditor(channelId: number, username: string): boolean {
+    const name = normalizeName(username);
+    if (!/^[a-z0-9_.-]{1,40}$/.test(name)) return false;
+    this.tx(channelId, () =>
+      this.db.prepare(`INSERT OR IGNORE INTO channel_editors (channel_id, username, created_at) VALUES (?, ?, ?)`).run(channelId, name, this.now()),
+    );
+    return true;
+  }
+
+  removeEditor(channelId: number, username: string): boolean {
+    return this.tx(channelId, () => this.db.prepare(`DELETE FROM channel_editors WHERE channel_id = ? AND username = ?`).run(channelId, normalizeName(username)).changes > 0);
+  }
+
+  /**
+   * Can this Kick user control this channel's dashboard? Its owner always can; others only while the
+   * owner has them on the access list.
+   */
+  canControl(channelId: number, user: DashboardLogin): "owner" | "editor" | null {
+    const row = this.channelRow(channelId);
+    if (!row) return null;
+    // Sessions from before mods existed have no user: only the owner could create them.
+    if (user.userId === null || user.userId === row.owner_id) return "owner";
+    if (!user.username) return null;
+    const hit = this.db.prepare(`SELECT 1 FROM channel_editors WHERE channel_id = ? AND username = ?`).get(channelId, normalizeName(user.username));
+    return hit ? "editor" : null;
+  }
+
+  /** Every channel this user can control: their own first, then the ones they help with. */
+  channelsFor(user: DashboardLogin): (ChannelInfo & { role: "owner" | "editor" })[] {
+    const own = user.userId === null ? [] : (this.db.prepare(`SELECT * FROM channels WHERE owner_id = ?`).all(user.userId) as ChannelRow[]);
+    const helping = user.username
+      ? (this.db
+          .prepare(`SELECT c.* FROM channels c JOIN channel_editors e ON e.channel_id = c.id WHERE e.username = ? ORDER BY c.display_name`)
+          .all(normalizeName(user.username)) as ChannelRow[])
+      : [];
+    return [
+      ...own.map((r) => ({ ...toChannel(r), role: "owner" as const })),
+      ...helping.filter((r) => r.owner_id !== user.userId).map((r) => ({ ...toChannel(r), role: "editor" as const })),
+    ];
+  }
+
   channels(): ChannelInfo[] {
     return (this.db.prepare(`SELECT * FROM channels`).all() as ChannelRow[]).map(toChannel);
   }
@@ -242,6 +299,7 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
       chatConnected,
       ...clips,
       bans: this.bans(channelId),
+      editors: this.editors(channelId),
       skipVotes: clips.current ? this.voteCount(channelId, "clips", clips.current.id) : 0,
       botLinked: this.db.prepare(`SELECT 1 FROM bot_tokens WHERE id = ?`).get(channelId) !== undefined,
       songs: {
@@ -421,12 +479,12 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
       const v = found.video;
       const info = this.db
         .prepare(
-          `INSERT INTO items (channel_id, queue, provider, clip_id, url, start, title, thumbnail, author, duration, media_url,
+          `INSERT INTO items (channel_id, queue, provider, clip_id, url, start, title, thumbnail, author, duration, media_url, loudness,
              requester_id, requester_name, requester_color, message_id, status, position, created_at)
-           VALUES (?, 'songs', 'youtube', ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'queued', ?, ?)`,
+           VALUES (?, 'songs', 'youtube', ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, 'queued', ?, ?)`,
         )
         .run(
-          channelId, v.id, `https://www.youtube.com/watch?v=${v.id}`, v.start, v.title, v.thumbnail, v.author, v.duration,
+          channelId, v.id, `https://www.youtube.com/watch?v=${v.id}`, v.start, v.title, v.thumbnail, v.author, v.duration, v.loudness,
           requester.id, requester.username, requester.color, messageId, position, this.now(),
         );
       const id = Number(info.lastInsertRowid);
@@ -451,8 +509,8 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
       if (reason && reason !== "not_allowed") return { ok: false, reason } as const;
       const v = found.video;
       this.db
-        .prepare(`UPDATE items SET clip_id = ?, url = ?, start = ?, title = ?, thumbnail = ?, author = ?, duration = ? WHERE id = ?`)
-        .run(v.id, `https://www.youtube.com/watch?v=${v.id}`, v.start, v.title, v.thumbnail, v.author, v.duration, itemId);
+        .prepare(`UPDATE items SET clip_id = ?, url = ?, start = ?, title = ?, thumbnail = ?, author = ?, duration = ?, loudness = ? WHERE id = ?`)
+        .run(v.id, `https://www.youtube.com/watch?v=${v.id}`, v.start, v.title, v.thumbnail, v.author, v.duration, v.loudness, itemId);
       return { ok: true, item: this.item(channelId, itemId)! } as const;
     });
   }
@@ -824,6 +882,7 @@ function toItem(r: ItemRow): QueueItem {
     author: r.author,
     duration: r.duration,
     mediaUrl: r.media_url,
+    loudness: r.loudness ?? null,
     requestedBy: { id: r.requester_id, username: r.requester_name, color: r.requester_color },
     status: r.status,
     createdAt: r.created_at,

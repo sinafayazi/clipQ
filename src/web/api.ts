@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { QueueKind, QueueSettings, QueueState, ServerMessage, SongSettings } from "../shared/types";
+import type { DashboardUser, QueueKind, QueueSettings, QueueState, ServerMessage, SongSettings } from "../shared/types";
 
 export class ApiError extends Error {
   constructor(
@@ -42,6 +42,14 @@ export const api = {
   ban: (username: string, minutes: number | null) => post("/api/bans", { username, minutes }),
   unban: (username: string) => post("/api/bans/remove", { username }),
   logout: () => post("/auth/logout"),
+  async me(): Promise<DashboardUser> {
+    const res = await fetch("/api/me");
+    if (!res.ok) throw new ApiError(res.status, `Request failed (${res.status})`);
+    return res.json();
+  },
+  switchChannel: (id: number) => post("/api/session/channel", { id }),
+  addEditor: (username: string) => post("/api/editors", { username }),
+  removeEditor: (username: string) => post("/api/editors/remove", { username }),
   async botTest(): Promise<{ ok: boolean; error: string | null; scopes: string | null }> {
     const res = await fetch("/api/bot/test", { method: "POST" });
     if (!res.ok) throw new ApiError(res.status, `Request failed (${res.status})`);

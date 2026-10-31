@@ -1449,3 +1449,20 @@ img {
   margin-inline-start: auto;
   color: var(--color-danger-text);
 }
+
+.channel-switch {
+  max-width: 14rem;
+  margin: 0;
+  padding: 0.1rem 0.4rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--color-bg-sunken);
+  color: var(--color-text-secondary);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.settings-switch {
+  margin-top: 0.9rem;
+}

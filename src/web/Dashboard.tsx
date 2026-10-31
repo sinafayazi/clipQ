@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import type { QueueItem, QueueKind, QueueState } from "../shared/types";
+import { songVolume, type DashboardUser, type QueueItem, type QueueKind, type QueueState } from "../shared/types";
 import { api, type Connection } from "./api";
 import { clipTitle, formatDuration, PROVIDER_LABEL } from "./clip-meta";
 import {
@@ -31,6 +31,7 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
   const [clearKind, setClearKind] = useState<QueueKind>("clips");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [banTarget, setBanTarget] = useState<string | null>(null);
+  const me = useMe(state.editors);
   const [tab, setTabState] = useState<QueueKind>(() => (readTab() === "songs" ? "songs" : "clips"));
   const setTab = (t: QueueKind) => {
     setTabState(t);
@@ -70,7 +71,11 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
           <span className={`tally${live ? " on" : ""}`} aria-hidden="true" />
           <div className="brand-text">
             <h1>clipQ</h1>
-            <p className="channel">{channel.displayName}</p>
+            {me && me.channels.length > 1 ? (
+              <ChannelSwitcher me={me} current={channel.id} onError={setError} />
+            ) : (
+              <p className="channel">{channel.displayName}</p>
+            )}
           </div>
         </div>
         <p className={`presence${live ? " live" : ""}`} role="status">
@@ -248,9 +253,50 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
         </form>
       </dialog>
 
-      <SettingsDialog state={state} kind={tab} open={settingsOpen} onClose={() => setSettingsOpen(false)} run={run} />
+      <SettingsDialog state={state} kind={tab} isOwner={me?.role !== "editor"} open={settingsOpen} onClose={() => setSettingsOpen(false)} run={run} />
       <BanDialog username={banTarget} onClose={() => setBanTarget(null)} run={run} />
     </div>
+  );
+}
+
+/** Who's logged in and which channels they can switch to. Refetched when the access list changes. */
+function useMe(editors: string[]) {
+  const [me, setMe] = useState<DashboardUser | null>(null);
+  const key = editors.join(",");
+  useEffect(() => {
+    let live = true;
+    api.me().then(
+      (m) => live && setMe(m),
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [key]);
+  return me;
+}
+
+/** For mods (or a streamer who's also a mod elsewhere): pick which channel's dashboard to control. */
+function ChannelSwitcher({ me, current, onError }: { me: DashboardUser; current: number; onError: (e: string) => void }) {
+  return (
+    <select
+      className="channel-switch"
+      aria-label="Channel"
+      value={current}
+      onChange={(e) =>
+        api.switchChannel(Number(e.target.value)).then(
+          () => location.reload(),
+          (err: Error) => onError(err.message),
+        )
+      }
+    >
+      {me.channels.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.displayName}
+          {c.role === "editor" ? " (mod)" : ""}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -302,7 +348,7 @@ function SongsView({
               <CopyLink url={obsUrl} />
             </div>
           ) : current ? (
-            <Player key={current.id} item={current} onEnded={onEnded} volume={s.volume} />
+            <Player key={current.id} item={current} onEnded={onEnded} volume={songVolume(s.volume, current.loudness, s.normalize)} />
           ) : (
             <div className="empty">
               <h2>{s.open ? "Waiting for songs" : "Song requests are closed"}</h2>
@@ -328,6 +374,9 @@ function SongsView({
               {current.requestedBy.username}
               {current.duration != null ? ` · ${formatDuration(current.duration)}` : ""}
               {s.voteSkip > 0 && skipVotes > 0 ? ` · Skip votes ${skipVotes}/${s.voteSkip}` : ""}
+              {songVolume(s.volume, current.loudness, s.normalize) !== s.volume
+                ? ` · ${(current.loudness ?? 0) > 0 ? "Loud" : "Quiet"} song, played at ${songVolume(s.volume, current.loudness, s.normalize)}%`
+                : ""}
             </p>
             <BanRequester username={current.requestedBy.username} onBan={onBan} />
           </div>
