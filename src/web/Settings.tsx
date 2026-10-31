@@ -127,7 +127,7 @@ export function SettingsDialog({
           <section className="settings-section" aria-labelledby="vote-title">
             <h3 id="vote-title">Vote skip</h3>
             <p className="settings-hint">
-              Viewers type <code>!vs</code> to vote to skip the playing clip; each viewer gets one vote per clip. 0 turns vote skip off.{" "}
+              Viewers type <code>!cvs</code> to vote to skip the playing clip; each viewer gets one vote per clip. 0 turns vote skip off.{" "}
               <code>!cq commands</code> lists every command in chat.
             </p>
             <VoteSkipForm key={settings.voteSkip} value={settings.voteSkip} run={run} />

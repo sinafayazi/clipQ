@@ -161,11 +161,11 @@ describe("commandsText", () => {
   it("fits one Kick message and mentions the vote count", () => {
     const t = commandsText(15);
     expect([...t].length).toBeLessThanOrEqual(500);
-    expect(t).toContain("!vs");
+    expect(t).toContain("!cvs");
     expect(t).toContain("15 votes");
     expect(t.startsWith("!")).toBe(false); // the bot must not trigger itself
     expect(t).toContain("!sr");
-    expect(commandsText(0)).not.toContain("!vs");
+    expect(commandsText(0)).not.toContain("!cvs");
   });
 });
 

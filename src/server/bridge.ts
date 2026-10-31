@@ -16,10 +16,10 @@ const HELP_COOLDOWN_MS = 30_000;
 
 /** The command list the bot posts for `!cq commands`. */
 export function commandsText(voteSkip: number): string {
-  const vote = voteSkip > 0 ? `!vs votes to skip the clip (${voteSkip} votes).` : "";
+  const vote = voteSkip > 0 ? `!cvs votes to skip the clip (${voteSkip} votes).` : "";
   return (
     `clipQ: post a clip link to queue it. ${vote} ` +
-    `Songs: !sr <link or name>, !song, !mysong, !wrongsong, !songs, !voteskip. ` +
+    `Songs: !sr <link or name>, !song, !mysong, !wrongsong, !songs, !vs (vote skip). ` +
     `Mods: !cq open/close/play/pause/next/skip/prev/clear, !cq ban/unban <user>, !cq timeout <user> [10m], !sr open/close/play/pause/skip/clear, !sr remove <user>, !volume <0-100>.`
   ).replace(/\s+/g, " ");
 }
@@ -89,7 +89,7 @@ export function bridgeChat(
     }
   }
 
-  /** `!vs` (clips) or `!voteskip` (songs): one vote to skip what's playing. The bot answers with the count. */
+  /** `!cvs` (clips) or `!vs` / `!voteskip` (songs): one vote to skip what's playing. The bot answers with the count. */
   function vote(channelId: number, msg: ChatMessage, kind: QueueKind = "clips") {
     const r = queues.voteSkip(channelId, msg.sender.id, kind);
     if (!("item" in r) || r.status === "already_voted") return;
@@ -101,7 +101,7 @@ export function bridgeChat(
       void bot.say(channelId, `Skipped by vote (${r.votes}/${r.needed}).`);
       return;
     }
-    const command = kind === "songs" ? "!voteskip" : "!vs";
+    const command = kind === "songs" ? "!vs" : "!cvs";
     const text = `Skip vote ${r.votes}/${r.needed} (${command})`;
     if (pending) {
       pending.text = text;
@@ -119,13 +119,13 @@ export function bridgeChat(
   }
 
   /**
-   * Anyone: `!vs`, `!cq commands` (or `!cq help`).
+   * Anyone: `!cvs`, `!cq commands` (or `!cq help`).
    * Broadcaster and moderators: `!cq open|close|play|pause|next|skip|prev|clear`, `!cq ban <user>`,
    * `!cq timeout <user> [10m]`, `!cq unban <user>`.
    */
   function runCommand(channelId: number, msg: ChatMessage, text: string) {
     const [cmd, arg, target, duration] = text.toLowerCase().split(/\s+/);
-    if (cmd === "!vs") return vote(channelId, msg);
+    if (cmd === "!cvs") return vote(channelId, msg);
     if (cmd !== "!cq" && cmd !== "!clipq") return;
 
     if (arg === "commands" || arg === "help" || arg === undefined) {

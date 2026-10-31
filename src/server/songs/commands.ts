@@ -11,7 +11,7 @@ import { parseSongQuery } from "./resolve.js";
 //   !mysong                                    your next song and when it plays
 //   !wrongsong                                 remove your last request
 //   !songs                                     how many are waiting, and the song page link
-//   !voteskip                                  vote to skip the playing song
+//   !vs (or !voteskip)                         vote to skip the playing song
 //   !volume                                    the song volume
 // Broadcaster and moderators: !sr open|close|play|pause|skip|next|prev|clear, !sr remove <user> (also as
 //   !songs …), !volume <0-100> (or +10 / -10).
@@ -71,7 +71,7 @@ interface Deps {
   bot: KickBot;
   log: FastifyBaseLogger;
   publicUrl: string;
-  /** `!voteskip`: counted and answered by the bridge, like `!vs` for clips. */
+  /** `!vs` / `!voteskip`: counted and answered by the bridge, like `!cvs` for clips. */
   vote: (channelId: number, msg: ChatMessage) => void;
 }
 
@@ -248,6 +248,7 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
       case "!wrongsong":
         wrongSong(channel, msg);
         return true;
+      case "!vs":
       case "!voteskip":
         vote(channel.id, msg);
         return true;

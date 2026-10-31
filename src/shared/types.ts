@@ -105,7 +105,7 @@ export interface QueueSettings {
   autoAdvance: boolean;
   /** Per platform, who may post. A platform missing here is open to everyone. */
   access: Partial<Record<Provider, AccessGroup[]>>;
-  /** Viewer votes (`!vs`) that skip the playing clip. 0 = vote skip off. */
+  /** Viewer votes (`!cvs`) that skip the playing clip. 0 = vote skip off. */
   voteSkip: number;
   songs: SongSettings;
 }
