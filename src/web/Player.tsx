@@ -32,30 +32,53 @@ export function Player({ item, onEnded, volume }: Props) {
 
 const enc = encodeURIComponent;
 
-// Instagram's embed page is a 54px header, the media at 4:5, then ~154px of likes and comments.
-// It's taller than the player, so it would scroll: size it so header and media fit, and crop the rest.
+// Instagram's embed page is a 54px header, the media, then ~154px of likes and comments. It's taller
+// than the player, so it would scroll: size it so header and media fit, and crop the rest. The media's
+// shape differs per post (reels 4:5, posts often 1:1), so we read it from the height the embed reports
+// to its parent ("MEASURE") and refit; 4:5 until it says.
 const IG_HEADER = 54;
 const IG_FOOTER = 154;
-const IG_RATIO = 5 / 4;
+const IG_DEFAULT_RATIO = 5 / 4;
 
 function Instagram({ id }: { id: string }) {
   const host = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  const [ratio, setRatio] = useState(IG_DEFAULT_RATIO);
+
   useEffect(() => {
     const el = host.current;
     if (!el) return;
-    const fit = () => setWidth(Math.floor(Math.min(el.clientWidth, (el.clientHeight - IG_HEADER) / IG_RATIO)));
+    const fit = () => setBox({ w: el.clientWidth, h: el.clientHeight });
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const media = Math.round(width * IG_RATIO);
+
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      const f = frame.current;
+      if (!f || e.source !== f.contentWindow || !/^https:\/\/www\.instagram\.com$/.test(e.origin)) return;
+      const d = typeof e.data === "string" ? safeJson(e.data) : e.data;
+      const height = d?.type === "MEASURE" ? Number(d.details?.height) : NaN;
+      if (!(height > 0) || !(f.clientWidth > 0)) return;
+      const r = (height - IG_HEADER - IG_FOOTER) / f.clientWidth;
+      // Ignore nonsense (still loading, an error page); keep whatever we had.
+      if (r >= 0.4 && r <= 2) setRatio((old) => (Math.abs(old - r) > 0.01 ? r : old));
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  const width = Math.floor(Math.min(box.w, (box.h - IG_HEADER) / ratio));
+  const media = Math.round(width * ratio);
   return (
     <div ref={host} className="ig-host">
       {width > 0 && (
         <div className="ig-crop" style={{ width, height: IG_HEADER + media }}>
           <iframe
+            ref={frame}
             src={`https://www.instagram.com/p/${enc(id)}/embed/`}
             style={{ width, height: IG_HEADER + media + IG_FOOTER }}
             scrolling="no"
