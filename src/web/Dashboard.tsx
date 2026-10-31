@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState, type CSSProperties } from "react";
-import type { QueueItem, QueueState } from "../shared/types";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import type { QueueItem, QueueKind, QueueState } from "../shared/types";
 import { api, type Connection } from "./api";
 import { clipTitle, formatDuration, PROVIDER_LABEL } from "./clip-meta";
 import {
@@ -21,14 +21,28 @@ import {
 } from "./icons";
 import { Player } from "./Player";
 import { useDragReorder } from "./reorder";
+import { CopyLink } from "./CopyLink";
 import { BanDialog, SettingsDialog } from "./Settings";
 
 export function Dashboard({ state, conn }: { state: QueueState; conn: Connection }) {
   const [error, setError] = useState<string | null>(null);
   const { channel, settings, current, queue, history } = state;
   const clearDialog = useRef<HTMLDialogElement>(null);
+  const [clearKind, setClearKind] = useState<QueueKind>("clips");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [banTarget, setBanTarget] = useState<string | null>(null);
+  const [tab, setTabState] = useState<QueueKind>(() => (readTab() === "songs" ? "songs" : "clips"));
+  const setTab = (t: QueueKind) => {
+    setTabState(t);
+    try {
+      localStorage.setItem(TAB_KEY, t);
+    } catch {}
+  };
+  const askClear = (kind: QueueKind) => {
+    setClearKind(kind);
+    clearDialog.current?.showModal();
+  };
+  const songs = settings.songs;
 
   const run = useCallback((p: Promise<unknown>) => {
     p.then(
@@ -73,7 +87,18 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
               onChange={() => run(api.settings({ open: !settings.open }))}
             />
             <span className="switch-ui" />
-            Queue open
+            Clips open
+          </label>
+          <label className="switch">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={songs.open}
+              aria-checked={songs.open}
+              onChange={() => run(api.settings({ songs: { open: !songs.open } }))}
+            />
+            <span className="switch-ui" />
+            Songs open
           </label>
           <button type="button" className="btn btn-ghost icon-start" onClick={() => setSettingsOpen(true)}>
             <SettingsIcon size={18} stroke={2} />
@@ -102,7 +127,21 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
           </p>
         )}
 
-        <div className="stage">
+        <div className="tabs" role="tablist" aria-label="Lists">
+          <button type="button" role="tab" id="tab-clips" aria-selected={tab === "clips"} aria-controls="panel-clips" onClick={() => setTab("clips")}>
+            Clips <span className="tab-count">{queue.length}</span>
+          </button>
+          <button type="button" role="tab" id="tab-songs" aria-selected={tab === "songs"} aria-controls="panel-songs" onClick={() => setTab("songs")}>
+            Songs <span className="tab-count">{state.songs.queue.length}</span>
+          </button>
+        </div>
+
+        {/* Hidden, not unmounted: a song keeps playing while you look at clips. */}
+        <div id="panel-songs" role="tabpanel" aria-labelledby="tab-songs" className="stage" hidden={tab !== "songs"}>
+          <SongsView state={state} run={run} onBan={setBanTarget} onClear={() => askClear("songs")} />
+        </div>
+
+        <div id="panel-clips" role="tabpanel" aria-labelledby="tab-clips" className="stage" hidden={tab !== "clips"}>
         <section className="player-col">
           <div className="player">
             {current ? (
@@ -162,7 +201,7 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
             </p>
             <span className="spacer" />
             {queue.length > 0 && (
-              <button type="button" className="btn btn-ghost" onClick={() => clearDialog.current?.showModal()}>
+              <button type="button" className="btn btn-ghost" onClick={() => askClear("clips")}>
                 Clear queue
               </button>
             )}
@@ -189,11 +228,15 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
           if (e.target === e.currentTarget) e.currentTarget.close();
         }}
         onClose={(e) => {
-          if ((e.target as HTMLDialogElement).returnValue === "clear") run(api.clear());
+          if ((e.target as HTMLDialogElement).returnValue === "clear") run(api.clear(clearKind));
         }}
       >
-        <h2 id="clear-title">Clear queue?</h2>
-        <p id="clear-body">This removes every waiting clip. The clip that's playing stays.</p>
+        <h2 id="clear-title">{clearKind === "songs" ? "Clear song requests?" : "Clear queue?"}</h2>
+        <p id="clear-body">
+          {clearKind === "songs"
+            ? "This removes every waiting song. The song that's playing stays."
+            : "This removes every waiting clip. The clip that's playing stays."}
+        </p>
         <form method="dialog" className="dialog-actions">
           <button className="btn" value="cancel">
             Cancel
@@ -204,9 +247,169 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
         </form>
       </dialog>
 
-      <SettingsDialog state={state} open={settingsOpen} onClose={() => setSettingsOpen(false)} run={run} />
+      <SettingsDialog state={state} kind={tab} open={settingsOpen} onClose={() => setSettingsOpen(false)} run={run} />
       <BanDialog username={banTarget} onClose={() => setBanTarget(null)} run={run} />
     </div>
+  );
+}
+
+const TAB_KEY = "clipq-tab";
+
+function readTab(): string | null {
+  try {
+    return localStorage.getItem(TAB_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** The song request list: its own player (or a pointer to the OBS page), controls and queue. */
+function SongsView({
+  state,
+  run,
+  onBan,
+  onClear,
+}: {
+  state: QueueState;
+  run: (p: Promise<unknown>) => void;
+  onBan: (username: string) => void;
+  onClear: () => void;
+}) {
+  const { current, queue, history, skipVotes, obsUrl } = state.songs;
+  const s = state.settings.songs;
+  const songPage = `/s/${state.channel.slug}`;
+
+  // Songs always move on by themselves. `ifCurrent` stops a double skip if the OBS page also reports the end.
+  const advancedFor = useRef<number | null>(null);
+  const onEnded = useCallback(() => {
+    if (!current || advancedFor.current === current.id) return;
+    advancedFor.current = current.id;
+    run(api.next(false, "songs", current.id));
+  }, [current, run]);
+
+  return (
+    <>
+      <section className="player-col">
+        <div className="player">
+          {s.player === "obs" ? (
+            <div className="empty">
+              <h2>Songs play in OBS</h2>
+              <p>
+                Add this link to OBS as a browser source. Keep it secret: anyone with it can skip songs. You can switch back in
+                Settings.
+              </p>
+              <CopyLink url={obsUrl} />
+            </div>
+          ) : current ? (
+            <Player key={current.id} item={current} onEnded={onEnded} volume={s.volume} />
+          ) : (
+            <div className="empty">
+              <h2>{s.open ? "Waiting for songs" : "Song requests are closed"}</h2>
+              <p>
+                {s.open ? (
+                  <>
+                    Viewers type <code>!sr</code> and a YouTube or Spotify link, or the song's name.
+                  </>
+                ) : (
+                  "Turn on Songs open to take songs from chat."
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+        {current && (
+          <div className="now">
+            <a href={current.url} target="_blank" rel="noreferrer" title={current.url}>
+              <span className="now-title">{current.title ?? "Song"}</span>
+              <ExternalIcon size={16} stroke={2} />
+            </a>
+            <p className="now-meta">
+              {current.requestedBy.username}
+              {current.duration != null ? ` · ${formatDuration(current.duration)}` : ""}
+              {s.voteSkip > 0 && skipVotes > 0 ? ` · Skip votes ${skipVotes}/${s.voteSkip}` : ""}
+            </p>
+          </div>
+        )}
+        <div className="transport">
+          <button type="button" className="btn icon-start" onClick={() => run(api.previous("songs"))} disabled={!history.length}>
+            <PrevIcon size={18} stroke={2} />
+            Previous
+          </button>
+          <button type="button" className="btn icon-start" onClick={() => run(api.next(true, "songs"))} disabled={!current}>
+            <SkipIcon size={18} stroke={2} />
+            Skip
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary icon-start"
+            onClick={() => run(api.next(false, "songs"))}
+            disabled={!current && !queue.length}
+          >
+            <NextIcon size={18} stroke={2} />
+            Next
+          </button>
+          <VolumeSlider value={s.volume} onChange={(volume) => run(api.settings({ songs: { volume } }))} />
+        </div>
+      </section>
+
+      <aside className="queue">
+        <div className="queue-head">
+          <h2>Songs</h2>
+          <p className="queue-count" role="status">
+            {queue.length === 0 ? "None waiting" : `${queue.length} waiting`}
+          </p>
+          <span className="spacer" />
+          <a className="btn btn-ghost" href={songPage} target="_blank" rel="noreferrer">
+            Song page
+          </a>
+          {queue.length > 0 && (
+            <button type="button" className="btn btn-ghost" onClick={onClear}>
+              Clear
+            </button>
+          )}
+        </div>
+        {queue.length === 0 ? (
+          <p className="queue-empty">
+            {s.open ? (
+              <>
+                Songs show up here when viewers type <code>!sr</code> in chat.
+              </>
+            ) : (
+              "Turn on Songs open to take songs from chat."
+            )}
+          </p>
+        ) : (
+          <QueueList queue={queue} run={run} onBan={onBan} />
+        )}
+      </aside>
+    </>
+  );
+}
+
+/** Song volume. Saves once you stop moving it; follows changes made elsewhere (a mod's !volume). */
+function VolumeSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [v, setV] = useState(value);
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => setV(value), [value]);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  return (
+    <label className="volume">
+      <span>Volume</span>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={5}
+        value={v}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          setV(n);
+          window.clearTimeout(timer.current);
+          timer.current = window.setTimeout(() => onChange(n), 250);
+        }}
+      />
+      <output>{v}%</output>
+    </label>
   );
 }
 

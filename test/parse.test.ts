@@ -162,6 +162,7 @@ describe("commandsText", () => {
     expect(t).toContain("!vs");
     expect(t).toContain("15 votes");
     expect(t.startsWith("!")).toBe(false); // the bot must not trigger itself
-    expect(commandsText(0)).toContain("Vote skip is off");
+    expect(t).toContain("!sr");
+    expect(commandsText(0)).not.toContain("!vs");
   });
 });

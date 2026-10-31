@@ -1,7 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { ACCESS_GROUPS, PROVIDERS, type AccessGroup, type Ban, type Provider, type QueueState } from "../shared/types";
+import {
+  ACCESS_GROUPS,
+  PROVIDERS,
+  type AccessGroup,
+  type Ban,
+  type Provider,
+  type QueueKind,
+  type QueueState,
+  type SongSettings,
+} from "../shared/types";
 import { api } from "./api";
 import { PROVIDER_LABEL } from "./clip-meta";
+import { CopyLink } from "./CopyLink";
 import { CloseIcon, ProviderIcon } from "./icons";
 
 const GROUP_LABEL: Record<AccessGroup, string> = {
@@ -22,8 +32,23 @@ export const BAN_CHOICES: { label: string; minutes: number | null }[] = [
 
 type Run = (p: Promise<unknown>) => void;
 
-/** Platforms (on/off, who can post) and banned viewers. Every change saves right away. */
-export function SettingsDialog({ state, open, onClose, run }: { state: QueueState; open: boolean; onClose: () => void; run: Run }) {
+/**
+ * Settings for one list: clips (platforms, vote skip) or songs. Bans and the chat bot apply to both,
+ * so both show them. Every change saves right away.
+ */
+export function SettingsDialog({
+  state,
+  kind,
+  open,
+  onClose,
+  run,
+}: {
+  state: QueueState;
+  kind: QueueKind;
+  open: boolean;
+  onClose: () => void;
+  run: Run;
+}) {
   const ref = useModal(open, onClose);
   const { settings, bans } = state;
 
@@ -50,60 +75,70 @@ export function SettingsDialog({ state, open, onClose, run }: { state: QueueStat
   return (
     <dialog ref={ref} className="dialog dialog-wide" aria-labelledby="settings-title" onClick={closeOnBackdrop}>
       <div className="dialog-head">
-        <h2 id="settings-title">Settings</h2>
+        <h2 id="settings-title">{kind === "songs" ? "Song settings" : "Clip settings"}</h2>
         <button type="button" className="btn btn-ghost btn-icon" aria-label="Close settings" onClick={onClose}>
           <CloseIcon size={18} stroke={2} />
         </button>
       </div>
 
-      <section className="settings-section" aria-labelledby="platforms-title">
-        <h3 id="platforms-title">Platforms</h3>
-        <p className="settings-hint">
-          Turn platforms on or off and choose who can post their links. Pick one or more groups (for example OG and Mods):
-          anyone with any of those badges can post. You can always post.
-        </p>
-        <ul className="platforms">
-          {PROVIDERS.map((p) => {
-            const on = settings.providers.includes(p);
-            const groups = settings.access[p] ?? ["everyone"];
-            return (
-              <li key={p} className={`platform${on ? "" : " off"}`}>
-                <label className="switch platform-name">
-                  <input type="checkbox" role="switch" checked={on} onChange={(e) => setEnabled(p, e.target.checked)} />
-                  <span className="switch-ui" />
-                  <ProviderIcon provider={p} size={18} stroke={1.75} />
-                  {PROVIDER_LABEL[p]}
-                </label>
-                <div className="chips" role="group" aria-label={`Who can post ${PROVIDER_LABEL[p]} links`}>
-                  {ACCESS_GROUPS.map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      className="chip"
-                      aria-pressed={groups.includes(g)}
-                      disabled={!on}
-                      onClick={() => toggleGroup(p, g)}
-                    >
-                      {GROUP_LABEL[g]}
-                    </button>
-                  ))}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
+      {kind === "clips" && (
+        <>
+          <section className="settings-section" aria-labelledby="platforms-title">
+            <h3 id="platforms-title">Platforms</h3>
+            <p className="settings-hint">
+              Turn platforms on or off and choose who can post their links. Pick one or more groups (for example OG and Mods): anyone with
+              any of those badges can post. You can always post.
+            </p>
+            <ul className="platforms">
+              {PROVIDERS.map((p) => {
+                const on = settings.providers.includes(p);
+                const groups = settings.access[p] ?? ["everyone"];
+                return (
+                  <li key={p} className={`platform${on ? "" : " off"}`}>
+                    <label className="switch platform-name">
+                      <input type="checkbox" role="switch" checked={on} onChange={(e) => setEnabled(p, e.target.checked)} />
+                      <span className="switch-ui" />
+                      <ProviderIcon provider={p} size={18} stroke={1.75} />
+                      {PROVIDER_LABEL[p]}
+                    </label>
+                    <div className="chips" role="group" aria-label={`Who can post ${PROVIDER_LABEL[p]} links`}>
+                      {ACCESS_GROUPS.map((g) => (
+                        <button
+                          key={g}
+                          type="button"
+                          className="chip"
+                          aria-pressed={groups.includes(g)}
+                          disabled={!on}
+                          onClick={() => toggleGroup(p, g)}
+                        >
+                          {GROUP_LABEL[g]}
+                        </button>
+                      ))}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
 
-      <section className="settings-section" aria-labelledby="vote-title">
-        <h3 id="vote-title">Vote skip</h3>
-        <p className="settings-hint">
-          Viewers type <code>!vs</code> to vote to skip the playing clip; each viewer gets one vote per clip. 0 turns vote skip
-          off. <code>!cq commands</code> lists every command in chat.
-        </p>
-        <VoteSkipForm key={settings.voteSkip} value={settings.voteSkip} run={run} />
+          <section className="settings-section" aria-labelledby="vote-title">
+            <h3 id="vote-title">Vote skip</h3>
+            <p className="settings-hint">
+              Viewers type <code>!vs</code> to vote to skip the playing clip; each viewer gets one vote per clip. 0 turns vote skip off.{" "}
+              <code>!cq commands</code> lists every command in chat.
+            </p>
+            <VoteSkipForm key={settings.voteSkip} value={settings.voteSkip} run={run} />
+          </section>
+        </>
+      )}
+
+      {kind === "songs" && <SongSettingsSection state={state} run={run} />}
+
+      <section className="settings-section" aria-labelledby="bot-title">
+        <h3 id="bot-title">Chat bot</h3>
         <p className="settings-hint">
           {state.botLinked
-            ? "The clipQ bot replies in your chat with the vote count."
+            ? "The clipQ bot replies in your chat: vote counts, song requests and the command list."
             : "The clipQ bot can't reply in your chat yet: log out and log in again, and allow sending chat messages."}
         </p>
         <BotTest />
@@ -112,8 +147,8 @@ export function SettingsDialog({ state, open, onClose, run }: { state: QueueStat
       <section className="settings-section" aria-labelledby="bans-title">
         <h3 id="bans-title">Banned viewers</h3>
         <p className="settings-hint">
-          Their links are ignored in clipQ (they can still chat on Kick). Mods can also type <code>!cq ban name</code>,{" "}
-          <code>!cq timeout name 10m</code> or <code>!cq unban name</code>.
+          Their clip links and song requests are ignored in clipQ (they can still chat on Kick). Mods can also type{" "}
+          <code>!cq ban name</code>, <code>!cq timeout name 10m</code> or <code>!cq unban name</code>.
         </p>
         <BanForm run={run} />
         {bans.length === 0 ? (
@@ -133,6 +168,139 @@ export function SettingsDialog({ state, open, onClose, run }: { state: QueueStat
         )}
       </section>
     </dialog>
+  );
+}
+
+/** Song requests: where they play, limits, vote skip, who can request. */
+function SongSettingsSection({ state, run }: { state: QueueState; run: Run }) {
+  const s = state.settings.songs;
+  const save = (songs: Partial<SongSettings>) => run(api.settings({ songs }));
+
+  const toggleGroup = (g: AccessGroup) => {
+    let next: AccessGroup[];
+    if (g === "everyone") next = ["everyone"];
+    else {
+      const without = s.access.filter((x) => x !== "everyone");
+      next = without.includes(g) ? without.filter((x) => x !== g) : [...without, g];
+      if (!next.length) next = ["everyone"];
+    }
+    save({ access: next });
+  };
+
+  return (
+    <section className="settings-section" aria-labelledby="songs-title">
+      <h3 id="songs-title">Song requests</h3>
+      <p className="settings-hint">
+        Viewers type <code>!sr</code> with a YouTube or Spotify link, or just the song's name. Spotify songs play from YouTube. Mods can
+        change the volume in chat with <code>!volume 40</code>. Viewers can see and change their songs on your{" "}
+        <a href={`/s/${state.channel.slug}`} target="_blank" rel="noreferrer">
+          song page
+        </a>
+        .
+      </p>
+
+      <fieldset className="player-choice">
+        <legend>Play songs in</legend>
+        <label>
+          <input type="radio" name="song-player" checked={s.player === "dashboard"} onChange={() => save({ player: "dashboard" })} />
+          This dashboard (Songs tab)
+        </label>
+        <label>
+          <input type="radio" name="song-player" checked={s.player === "obs"} onChange={() => save({ player: "obs" })} />
+          An OBS browser source
+        </label>
+      </fieldset>
+      {s.player === "obs" && (
+        <>
+          <p className="settings-hint">Add this link in OBS as a browser source. Keep it secret: anyone with it can skip songs.</p>
+          <CopyLink url={state.songs.obsUrl} />
+        </>
+      )}
+
+      <div className="number-grid">
+        <NumberField
+          id="song-max-len"
+          label="Longest song (minutes)"
+          value={Math.round(s.maxDuration / 60)}
+          min={1}
+          max={180}
+          onSave={(n) => save({ maxDuration: n * 60 })}
+        />
+        <NumberField
+          id="song-per-user"
+          label="Songs per viewer (0 = no limit)"
+          value={s.perUserLimit}
+          min={0}
+          max={100}
+          onSave={(n) => save({ perUserLimit: n })}
+        />
+        <NumberField id="song-max" label="Most songs waiting" value={s.maxSize} min={1} max={1000} onSave={(n) => save({ maxSize: n })} />
+        <NumberField
+          id="song-vote"
+          label="Votes to skip (0 = off)"
+          value={s.voteSkip}
+          min={0}
+          max={1000}
+          onSave={(n) => save({ voteSkip: n })}
+        />
+        <NumberField id="song-volume" label="Volume (0–100)" value={s.volume} min={0} max={100} onSave={(n) => save({ volume: n })} />
+      </div>
+
+      <div className="chips" role="group" aria-label="Who can request songs">
+        <span className="chips-label">Who can request</span>
+        {ACCESS_GROUPS.map((g) => (
+          <button key={g} type="button" className="chip" aria-pressed={s.access.includes(g)} onClick={() => toggleGroup(g)}>
+            {GROUP_LABEL[g]}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** A number input that saves on Enter or when you leave it. */
+function NumberField({
+  id,
+  label,
+  value,
+  min,
+  max,
+  onSave,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onSave: (n: number) => void;
+}) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  const n = Number(text);
+  const valid = text !== "" && Number.isInteger(n) && n >= min && n <= max;
+  const save = () => {
+    if (valid && n !== value) onSave(n);
+    else if (!valid) setText(String(value));
+  };
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        inputMode="numeric"
+        value={text}
+        onChange={(e) => setText(e.target.value.replace(/\D/g, "").slice(0, 4))}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            save();
+          }
+        }}
+        aria-invalid={!valid}
+        autoComplete="off"
+      />
+    </div>
   );
 }
 
@@ -215,7 +383,14 @@ function BanForm({ run }: { run: Run }) {
     >
       <div className="field">
         <label htmlFor="ban-name">Username</label>
-        <input id="ban-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="username" autoComplete="off" spellCheck={false} />
+        <input
+          id="ban-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="username"
+          autoComplete="off"
+          spellCheck={false}
+        />
       </div>
       <div className="field">
         <label htmlFor="ban-length">For</label>

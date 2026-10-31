@@ -6,15 +6,17 @@ interface Props {
   item: QueueItem;
   /** Called when the clip finishes, for providers that report it. */
   onEnded: () => void;
+  /** 0–100. Songs only (YouTube); clips keep the embed's own volume. */
+  volume?: number;
 }
 
 /** One embed per provider. Keyed by item id by the caller, so every clip gets a fresh player. */
-export function Player({ item, onEnded }: Props) {
+export function Player({ item, onEnded, volume }: Props) {
   switch (item.provider) {
     case "kick":
       return item.mediaUrl ? <HlsVideo src={item.mediaUrl} onEnded={onEnded} /> : <KickLookup item={item} onEnded={onEnded} />;
     case "youtube":
-      return <YouTube id={item.clipId} start={item.start ?? 0} onEnded={onEnded} />;
+      return <YouTube id={item.clipId} start={item.start ?? 0} onEnded={onEnded} volume={volume} />;
     case "twitch":
       return <Frame src={`https://clips.twitch.tv/embed?clip=${enc(item.clipId)}&parent=${location.hostname}&autoplay=true`} />;
     case "tiktok":
@@ -165,9 +167,11 @@ function loadYouTube(): Promise<any> {
   return ytReady;
 }
 
-function YouTube({ id, start, onEnded }: { id: string; start: number; onEnded: () => void }) {
+function YouTube({ id, start, onEnded, volume }: { id: string; start: number; onEnded: () => void; volume?: number }) {
   const host = useRef<HTMLDivElement>(null);
   const ended = useLatest(onEnded);
+  const vol = useLatest(volume);
+  const ready = useRef<any>(null);
 
   useEffect(() => {
     let player: any = null;
@@ -180,6 +184,10 @@ function YouTube({ id, start, onEnded }: { id: string; start: number; onEnded: (
         videoId: id,
         playerVars: { autoplay: 1, start, rel: 0, playsinline: 1 },
         events: {
+          onReady: () => {
+            ready.current = player;
+            if (vol.current !== undefined) player.setVolume(vol.current);
+          },
           onStateChange: (e: { data: number }) => {
             if (e.data === YT.PlayerState.ENDED) ended.current();
           },
@@ -188,9 +196,15 @@ function YouTube({ id, start, onEnded }: { id: string; start: number; onEnded: (
     });
     return () => {
       cancelled = true;
+      ready.current = null;
       player?.destroy?.();
     };
   }, [id, start]);
+
+  // Volume changes (a mod's !volume) apply to the running song without restarting it.
+  useEffect(() => {
+    if (volume !== undefined) ready.current?.setVolume?.(volume);
+  }, [volume]);
 
   return <div ref={host} className="yt-host" />;
 }

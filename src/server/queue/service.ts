@@ -10,7 +10,10 @@ import {
   type ClipRef,
   type ItemStatus,
   type Provider,
+  type PublicSong,
+  type PublicSongs,
   type QueueItem,
+  type QueueKind,
   type QueueSettings,
   type QueueState,
   type Requester,
@@ -18,6 +21,18 @@ import {
 import type { Resolved } from "../clips/resolve.js";
 import type { Db } from "../db.js";
 import { RecentSet } from "../kick/chat.js";
+import type { SongQuery, SongResolved, SongVideo } from "../songs/resolve.js";
+
+export const songSettingsSchema = z.object({
+  open: z.boolean(),
+  maxSize: z.number().int().min(1).max(1000),
+  perUserLimit: z.number().int().min(0).max(100),
+  maxDuration: z.number().int().min(30).max(3 * 3600),
+  voteSkip: z.number().int().min(0).max(1000),
+  access: z.array(z.enum(ACCESS_GROUPS)).min(1),
+  player: z.enum(["dashboard", "obs"]),
+  volume: z.number().int().min(0).max(100),
+});
 
 export const settingsSchema = z.object({
   open: z.boolean(),
@@ -27,7 +42,14 @@ export const settingsSchema = z.object({
   autoAdvance: z.boolean(),
   access: z.record(z.enum(PROVIDERS), z.array(z.enum(ACCESS_GROUPS)).min(1)),
   voteSkip: z.number().int().min(0).max(1000),
+  songs: songSettingsSchema,
 });
+
+/** How songs are looked up, and the OBS page link for a channel (it carries a secret key). */
+export interface SongOptions {
+  resolve: (q: SongQuery, maxDuration: number) => Promise<SongResolved>;
+  obsUrl: (channelId: number) => string;
+}
 
 export type VoteResult =
   | { status: "off" | "nothing_playing" }
@@ -46,7 +68,11 @@ const GROUP_BADGES: Record<Exclude<AccessGroup, "everyone">, string[]> = {
 
 /** May a viewer with these badges post links for this platform? */
 export function hasAccess(settings: QueueSettings, provider: Provider, badges: readonly string[]): boolean {
-  const groups = settings.access[provider];
+  return inGroups(settings.access[provider], badges);
+}
+
+/** Is a viewer with these badges in any of the groups? Missing or "everyone" lets anyone in. */
+export function inGroups(groups: readonly AccessGroup[] | undefined, badges: readonly string[]): boolean {
   if (!groups || groups.includes("everyone") || badges.includes("broadcaster")) return true;
   return groups.some((g) => g !== "everyone" && GROUP_BADGES[g].some((b) => badges.includes(b)));
 }
@@ -61,6 +87,8 @@ export type RejectReason =
   | "duplicate"
   | "not_found"
   | "unplayable"
+  | "too_long"
+  | "live"
   | "moderated";
 
 /** The sender of a link, as far as the rules care. */
@@ -70,6 +98,11 @@ interface Viewer {
   badges: readonly string[];
 }
 
+/** The channel owner (or a clipQ super user, who chats with that badge added): no limits, can't be banned. */
+function isBroadcaster(who: Viewer) {
+  return who.badges.includes("broadcaster");
+}
+
 /** Kick usernames are case-insensitive; people also type them with an @. */
 export function normalizeName(username: string): string {
   return username.trim().replace(/^@/, "").toLowerCase();
@@ -77,13 +110,17 @@ export function normalizeName(username: string): string {
 
 export type SubmitResult ={ ok: true; item: QueueItem } | { ok: false; reason: RejectReason };
 
-const QUEUE = "clips";const HISTORY_LIMIT = 50;
+const KINDS: QueueKind[] = ["clips", "songs"];
+const HISTORY_LIMIT = 50;
+/** A viewer's own song history on the song page. */
+const MY_HISTORY_LIMIT = 30;
 /** A ban this recent also drops that user's links that are still being looked up. */
 const BAN_WINDOW_MS = 60_000;
 
 interface ItemRow {
   id: number;
   channel_id: number;
+  queue: QueueKind;
   provider: Provider;
   clip_id: string;
   url: string;
@@ -120,14 +157,17 @@ interface ChannelRow {
 export class QueueService extends EventEmitter<{ changed: [channelId: number] }> {
   private deletedMessages = new RecentSet(5000);
   private recentBans = new Map<string, number>();
-  private lastTicket = new Map<number, number>();
-  /** Per channel: who voted to skip which clip. Votes for any other clip are stale. */
-  private votes = new Map<number, { itemId: number; voters: Set<number> }>();
+  private lastTicket = new Map<string, number>();
+  /** Per "channel:list": who voted to skip which item. Votes for any other item are stale. */
+  private votes = new Map<string, { itemId: number; voters: Set<number> }>();
+  /** When each playing item started, for "plays in about N min". In memory: lost on restart. */
+  private startedAt = new Map<number, number>();
 
   constructor(
     private readonly db: Db,
     private readonly resolve: (ref: ClipRef) => Promise<Resolved>,
     private readonly now: () => number = Date.now,
+    private readonly songOpts: SongOptions = { resolve: async () => ({ ok: false, reason: "not_found" }), obsUrl: () => "" },
   ) {
     super();
   }
@@ -164,6 +204,11 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     return row ? toChannel(row) : null;
   }
 
+  channelBySlug(slug: string): ChannelInfo | null {
+    const row = this.db.prepare(`SELECT * FROM channels WHERE slug = ?`).get(slug.toLowerCase()) as ChannelRow | undefined;
+    return row ? toChannel(row) : null;
+  }
+
   channels(): ChannelInfo[] {
     return (this.db.prepare(`SELECT * FROM channels`).all() as ChannelRow[]).map(toChannel);
   }
@@ -186,52 +231,67 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
   state(channelId: number, chatConnected: boolean): QueueState {
     const row = this.channelRow(channelId);
     if (!row) throw new Error(`unknown channel ${channelId}`);
-    const rows = (status: string, order: string, limit = -1) =>
-      (
-        this.db
-          .prepare(`SELECT * FROM items WHERE channel_id = ? AND queue = ? AND status IN (${status}) ORDER BY ${order} LIMIT ?`)
-          .all(channelId, QUEUE, limit) as ItemRow[]
-      ).map(toItem);
-
-    const current = rows(`'playing'`, "id DESC", 1)[0] ?? null;
+    const clips = this.lists(channelId, "clips");
+    const songs = this.lists(channelId, "songs");
     return {
       channel: toChannel(row),
       settings: readSettings(row.settings),
       chatConnected,
-      current,
+      ...clips,
+      bans: this.bans(channelId),
+      skipVotes: clips.current ? this.voteCount(channelId, "clips", clips.current.id) : 0,
+      botLinked: this.db.prepare(`SELECT 1 FROM bot_tokens WHERE id = ?`).get(channelId) !== undefined,
+      songs: {
+        ...songs,
+        skipVotes: songs.current ? this.voteCount(channelId, "songs", songs.current.id) : 0,
+        startedAt: songs.current ? (this.startedAt.get(songs.current.id) ?? null) : null,
+        obsUrl: this.songOpts.obsUrl(channelId),
+      },
+    };
+  }
+
+  /** What's playing, what's waiting and what played, for one list. */
+  private lists(channelId: number, kind: QueueKind) {
+    const rows = (status: string, order: string, limit = -1) =>
+      (
+        this.db
+          .prepare(`SELECT * FROM items WHERE channel_id = ? AND queue = ? AND status IN (${status}) ORDER BY ${order} LIMIT ?`)
+          .all(channelId, kind, limit) as ItemRow[]
+      ).map(toItem);
+    return {
+      current: rows(`'playing'`, "id DESC", 1)[0] ?? null,
       queue: rows(`'queued'`, "position, id"),
       history: rows(`'played','skipped'`, "finished_at DESC, id DESC", HISTORY_LIMIT),
-      bans: this.bans(channelId),
-      skipVotes: current ? this.voteCount(channelId, current.id) : 0,
-      botLinked: this.db.prepare(`SELECT 1 FROM bot_tokens WHERE id = ?`).get(channelId) !== undefined,
     };
   }
 
   // ---- vote skip ------------------------------------------------------------------------------
 
-  /** A viewer votes to skip the playing clip; enough votes skip it. One vote per viewer per clip. */
-  voteSkip(channelId: number, userId: number): VoteResult {
+  /** A viewer votes to skip what's playing; enough votes skip it. One vote per viewer per clip or song. */
+  voteSkip(channelId: number, userId: number, kind: QueueKind = "clips"): VoteResult {
     return this.tx(channelId, () => {
-      const needed = this.settings(channelId).voteSkip;
+      const s = this.settings(channelId);
+      const needed = kind === "songs" ? s.songs.voteSkip : s.voteSkip;
       if (needed === 0) return { status: "off" } as const;
-      const id = this.currentId(channelId);
+      const id = this.currentId(channelId, kind);
       const item = id === null ? null : this.item(channelId, id);
       if (!item) return { status: "nothing_playing" } as const;
 
-      let v = this.votes.get(channelId);
-      if (!v || v.itemId !== item.id) this.votes.set(channelId, (v = { itemId: item.id, voters: new Set() }));
+      const key = `${channelId}:${kind}`;
+      let v = this.votes.get(key);
+      if (!v || v.itemId !== item.id) this.votes.set(key, (v = { itemId: item.id, voters: new Set() }));
       if (v.voters.has(userId)) return { status: "already_voted", votes: v.voters.size, needed, item } as const;
       v.voters.add(userId);
       const votes = v.voters.size;
       if (votes < needed) return { status: "counted", votes, needed, item } as const;
-      this.votes.delete(channelId);
-      this.next(channelId, "skipped");
+      this.votes.delete(key);
+      this.next(channelId, "skipped", kind);
       return { status: "skipped", votes, needed, item } as const;
     });
   }
 
-  private voteCount(channelId: number, itemId: number): number {
-    const v = this.votes.get(channelId);
+  private voteCount(channelId: number, kind: QueueKind, itemId: number): number {
+    const v = this.votes.get(`${channelId}:${kind}`);
     return v && v.itemId === itemId ? v.voters.size : 0;
   }
 
@@ -246,11 +306,11 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     const requesterId = who.id;
 
     const count = (sql: string, ...args: unknown[]) =>
-      (this.db.prepare(`SELECT COUNT(*) AS n FROM items WHERE channel_id = ? AND queue = ? AND ${sql}`).get(channelId, QUEUE, ...args) as { n: number }).n;
+      (this.db.prepare(`SELECT COUNT(*) AS n FROM items WHERE channel_id = ? AND queue = ? AND ${sql}`).get(channelId, "clips", ...args) as { n: number }).n;
 
     if (count(`provider = ? AND clip_id = ? AND status IN ('queued','playing')`, ref.provider, ref.id) > 0) return "duplicate";
     if (count(`status = 'queued'`) >= s.maxSize) return "full";
-    if (s.perUserLimit > 0 && count(`status = 'queued' AND requester_id = ?`, requesterId) >= s.perUserLimit) return "user_limit";
+    if (s.perUserLimit > 0 && !isBroadcaster(who) && count(`status = 'queued' AND requester_id = ?`, requesterId) >= s.perUserLimit) return "user_limit";
     return null;
   }
 
@@ -268,7 +328,7 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     if (early) return { ok: false, reason: early };
 
     // Take a place in line now: lookups finish in any order, but chat order decides the queue.
-    const position = this.ticket(channelId);
+    const position = this.ticket(channelId, "clips");
     const resolved = await this.resolve(ref);
     if (!resolved.ok) return { ok: false, reason: resolved.reason };
 
@@ -288,7 +348,7 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)`,
         )
         .run(
-          channelId, QUEUE, resolved.ref.provider, resolved.ref.id, resolved.ref.url, resolved.ref.start ?? null,
+          channelId, "clips", resolved.ref.provider, resolved.ref.id, resolved.ref.url, resolved.ref.start ?? null,
           meta.title, meta.thumbnail, meta.author, meta.duration, meta.mediaUrl,
           requester.id, requester.username, requester.color, messageId, position, this.now(),
         );
@@ -296,40 +356,205 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     });
   }
 
-  // ---- playback controls ----------------------------------------------------------------------
+  // ---- song requests --------------------------------------------------------------------------
 
-  /** Finish the current clip and start the first queued one. */
-  next(channelId: number, as: "played" | "skipped" = "played") {
-    this.tx(channelId, () => {
-      this.finishCurrent(channelId, as);
-      this.startFirstQueued(channelId);
+  /** Rules for a song request. Without `video` only the ones that don't need the lookup run. */
+  checkSong(channelId: number, who: Viewer, video?: Pick<SongVideo, "id" | "duration">, replacing?: number): RejectReason | null {
+    const s = this.settings(channelId).songs;
+    if (!s.open) return "closed";
+    if (!isBroadcaster(who) && this.isBanned(channelId, who.username, who.id)) return "banned";
+    if (!inGroups(s.access, who.badges)) return "not_allowed";
+    const count = (sql: string, ...args: unknown[]) =>
+      (this.db.prepare(`SELECT COUNT(*) AS n FROM items WHERE channel_id = ? AND queue = 'songs' AND id != ? AND ${sql}`).get(channelId, replacing ?? -1, ...args) as { n: number }).n;
+    if (replacing === undefined) {
+      if (count(`status = 'queued'`) >= s.maxSize) return "full";
+      if (s.perUserLimit > 0 && !isBroadcaster(who) && count(`status = 'queued' AND requester_id = ?`, who.id) >= s.perUserLimit) return "user_limit";
+    }
+    if (!video) return null;
+    if (count(`clip_id = ? AND status IN ('queued','playing')`, video.id) > 0) return "duplicate";
+    if (video.duration !== null && video.duration > s.maxDuration) return "too_long";
+    return null;
+  }
+
+  /** `!sr <link or name>`. Starts right away when nothing is playing. */
+  async requestSong(
+    channelId: number,
+    query: SongQuery,
+    requester: Requester,
+    messageId: string | null,
+    badges: readonly string[] = [],
+  ): Promise<SubmitResult> {
+    const who: Viewer = { id: requester.id, username: requester.username, badges };
+    const early = this.checkSong(channelId, who);
+    if (early) return { ok: false, reason: early };
+
+    const position = this.ticket(channelId, "songs");
+    const found = await this.songOpts.resolve(query, this.settings(channelId).songs.maxDuration);
+    if (!found.ok) return { ok: false, reason: found.reason };
+    if (messageId && this.deletedMessages.has(`${channelId}:${messageId}`)) return { ok: false, reason: "moderated" };
+    if (this.recentlyBanned(channelId, requester.id)) return { ok: false, reason: "moderated" };
+
+    return this.tx(channelId, () => {
+      const reason = this.checkSong(channelId, who, found.video);
+      if (reason) return { ok: false, reason } as const;
+      const v = found.video;
+      const info = this.db
+        .prepare(
+          `INSERT INTO items (channel_id, queue, provider, clip_id, url, start, title, thumbnail, author, duration, media_url,
+             requester_id, requester_name, requester_color, message_id, status, position, created_at)
+           VALUES (?, 'songs', 'youtube', ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'queued', ?, ?)`,
+        )
+        .run(
+          channelId, v.id, `https://www.youtube.com/watch?v=${v.id}`, v.start, v.title, v.thumbnail, v.author, v.duration,
+          requester.id, requester.username, requester.color, messageId, position, this.now(),
+        );
+      const id = Number(info.lastInsertRowid);
+      if (this.currentId(channelId, "songs") === null) this.startFirstQueued(channelId, "songs");
+      return { ok: true, item: this.item(channelId, id)! } as const;
     });
   }
 
-  /** Put the current clip back at the front of the queue and replay the last finished one. */
-  previous(channelId: number) {
+  /** A viewer swaps one of their waiting songs for another, keeping its place in line. */
+  async replaceSong(channelId: number, itemId: number, viewer: { id: number; username: string }, query: SongQuery): Promise<SubmitResult> {
+    const own = () => {
+      const row = this.itemRow(channelId, itemId);
+      return row && row.queue === "songs" && row.status === "queued" && row.requester_id === viewer.id ? row : null;
+    };
+    if (!own()) return { ok: false, reason: "not_found" };
+    const found = await this.songOpts.resolve(query, this.settings(channelId).songs.maxDuration);
+    if (!found.ok) return { ok: false, reason: found.reason };
+    return this.tx(channelId, () => {
+      if (!own()) return { ok: false, reason: "not_found" } as const;
+      const reason = this.checkSong(channelId, { ...viewer, badges: [] }, found.video, itemId);
+      // Access was checked when they first requested; a later badge change shouldn't block a swap.
+      if (reason && reason !== "not_allowed") return { ok: false, reason } as const;
+      const v = found.video;
+      this.db
+        .prepare(`UPDATE items SET clip_id = ?, url = ?, start = ?, title = ?, thumbnail = ?, author = ?, duration = ? WHERE id = ?`)
+        .run(v.id, `https://www.youtube.com/watch?v=${v.id}`, v.start, v.title, v.thumbnail, v.author, v.duration, itemId);
+      return { ok: true, item: this.item(channelId, itemId)! } as const;
+    });
+  }
+
+  /** A viewer removes one of their waiting songs. */
+  removeOwnSong(channelId: number, itemId: number, userId: number): boolean {
+    return this.tx(channelId, () => this.removeWhere(channelId, `id = ? AND queue = 'songs' AND status = 'queued' AND requester_id = ?`, itemId, userId) > 0);
+  }
+
+  /** `!songs remove <user>`: drop everything that viewer has waiting or playing in the song list. */
+  removeSongsByName(channelId: number, username: string): number {
+    return this.tx(channelId, () => this.removeWhere(channelId, `queue = 'songs' AND lower(requester_name) = ?`, normalizeName(username)));
+  }
+
+  /** `!wrongsong`: drop the viewer's most recent waiting song. */
+  wrongSong(channelId: number, userId: number): QueueItem | null {
+    return this.tx(channelId, () => {
+      const row = this.db
+        .prepare(`SELECT * FROM items WHERE channel_id = ? AND queue = 'songs' AND status = 'queued' AND requester_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`)
+        .get(channelId, userId) as ItemRow | undefined;
+      if (!row) return null;
+      this.removeWhere(channelId, `id = ?`, row.id);
+      return toItem(row);
+    });
+  }
+
+  /**
+   * The song queue with when each one should start: what's left of the playing song plus everything
+   * ahead. Null once a song ahead has no known length.
+   */
+  songTimeline(channelId: number): { current: QueueItem | null; left: number | null; queue: { item: QueueItem; startsIn: number | null }[] } {
+    const { current, queue } = this.lists(channelId, "songs");
+    let left: number | null = 0;
+    if (current) {
+      const started = this.startedAt.get(current.id);
+      left =
+        current.duration === null
+          ? null
+          : started === undefined
+            ? current.duration // unknown start (restart): assume it just began
+            : Math.max(0, current.duration - (this.now() - started) / 1000);
+    }
+    let t = left;
+    const out = queue.map((item) => {
+      const startsIn = t === null ? null : Math.round(t);
+      t = t === null || item.duration === null ? null : t + item.duration;
+      return { item, startsIn };
+    });
+    return { current, left: left === null ? null : Math.round(left), queue: out };
+  }
+
+  /** The public song page: playing, waiting, and (if logged in) the viewer's own songs. */
+  publicSongs(channelId: number, viewer: { id: number; username: string } | null): PublicSongs {
+    const row = this.channelRow(channelId);
+    if (!row) throw new Error(`unknown channel ${channelId}`);
+    const tl = this.songTimeline(channelId);
+    const pub = (i: QueueItem, startsIn: number | null = null): PublicSong => ({
+      id: i.id,
+      title: i.title,
+      author: i.author,
+      thumbnail: i.thumbnail,
+      url: i.url,
+      duration: i.duration,
+      requestedBy: i.requestedBy.username,
+      startsIn,
+    });
+    const queue = tl.queue.map((q) => pub(q.item, q.startsIn));
+    let me: PublicSongs["me"] = null;
+    if (viewer) {
+      const history = (
+        this.db
+          .prepare(`SELECT * FROM items WHERE channel_id = ? AND queue = 'songs' AND requester_id = ? AND status IN ('played','skipped','playing') ORDER BY COALESCE(finished_at, created_at) DESC, id DESC LIMIT ?`)
+          .all(channelId, viewer.id, MY_HISTORY_LIMIT) as ItemRow[]
+      ).map((r) => pub(toItem(r)));
+      me = {
+        username: viewer.username,
+        queued: tl.queue.filter((q) => q.item.requestedBy.id === viewer.id).map((q) => pub(q.item, q.startsIn)),
+        history,
+      };
+    }
+    return {
+      channel: { slug: row.slug, displayName: row.display_name },
+      open: readSettings(row.settings).songs.open,
+      current: tl.current ? pub(tl.current) : null,
+      queue,
+      me,
+    };
+  }
+
+  // ---- playback controls ----------------------------------------------------------------------
+
+  /** Finish what's playing and start the first queued one. */
+  next(channelId: number, as: "played" | "skipped" = "played", kind: QueueKind = "clips") {
+    this.tx(channelId, () => {
+      this.finishCurrent(channelId, as, kind);
+      this.startFirstQueued(channelId, kind);
+    });
+  }
+
+  /** Put what's playing back at the front of the queue and replay the last finished one. */
+  previous(channelId: number, kind: QueueKind = "clips") {
     this.tx(channelId, () => {
       const last = this.db
         .prepare(`SELECT id FROM items WHERE channel_id = ? AND queue = ? AND status IN ('played','skipped') ORDER BY finished_at DESC, id DESC LIMIT 1`)
-        .get(channelId, QUEUE) as { id: number } | undefined;
+        .get(channelId, kind) as { id: number } | undefined;
       if (!last) return;
-      const current = this.currentId(channelId);
+      const current = this.currentId(channelId, kind);
       if (current !== null) {
-        this.db.prepare(`UPDATE items SET status = 'queued', position = ? WHERE id = ?`).run(this.minPosition(channelId) - 1, current);
+        this.db.prepare(`UPDATE items SET status = 'queued', position = ? WHERE id = ?`).run(this.minPosition(channelId, kind) - 1, current);
       }
-      this.db.prepare(`UPDATE items SET status = 'playing', finished_at = NULL WHERE id = ?`).run(last.id);
+      this.setPlaying(last.id);
     });
   }
 
-  /** Play a specific clip now, from the queue or the history. The interrupted clip goes back on top of the queue. */
+  /** Play a specific item now, from the queue or the history. The interrupted one goes back on top of its queue. */
   play(channelId: number, itemId: number): boolean {
     return this.tx(channelId, () => {
-      const item = this.item(channelId, itemId);
-      if (!item || item.status === "removed" || item.status === "playing") return item?.status === "playing";
-      const current = this.currentId(channelId);
-      this.db.prepare(`UPDATE items SET status = 'playing', finished_at = NULL WHERE id = ?`).run(itemId);
+      const row = this.itemRow(channelId, itemId);
+      if (!row || row.status === "removed" || row.status === "playing") return row?.status === "playing";
+      const current = this.currentId(channelId, row.queue);
+      this.setPlaying(itemId);
       if (current !== null) {
-        this.db.prepare(`UPDATE items SET status = 'queued', position = ? WHERE id = ?`).run(this.minPosition(channelId) - 1, current);
+        this.db.prepare(`UPDATE items SET status = 'queued', position = ? WHERE id = ?`).run(this.minPosition(channelId, row.queue) - 1, current);
       }
       return true;
     });
@@ -339,27 +564,29 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     return this.tx(channelId, () => this.removeWhere(channelId, `id = ?`, itemId) > 0);
   }
 
-  /** Move a queued clip to a 0-based index in the queue. */
+  /** Move a queued item to a 0-based index in its queue. */
   move(channelId: number, itemId: number, toIndex: number): boolean {
     return this.tx(channelId, () => {
+      const kind = this.itemRow(channelId, itemId)?.queue;
+      if (!kind) return false;
       const ids = (
-        this.db.prepare(`SELECT id FROM items WHERE channel_id = ? AND queue = ? AND status = 'queued' ORDER BY position, id`).all(channelId, QUEUE) as { id: number }[]
+        this.db.prepare(`SELECT id FROM items WHERE channel_id = ? AND queue = ? AND status = 'queued' ORDER BY position, id`).all(channelId, kind) as { id: number }[]
       ).map((r) => r.id);
       const from = ids.indexOf(itemId);
       if (from < 0) return false;
       ids.splice(from, 1);
       ids.splice(Math.max(0, Math.min(toIndex, ids.length)), 0, itemId);
       // Renumber from the current lowest position so no number grows past a pending ticket.
-      const base = this.minPosition(channelId);
+      const base = this.minPosition(channelId, kind);
       const set = this.db.prepare(`UPDATE items SET position = ? WHERE id = ?`);
       ids.forEach((id, i) => set.run(base + i, id));
       return true;
     });
   }
 
-  clear(channelId: number) {
+  clear(channelId: number, kind: QueueKind = "clips") {
     this.tx(channelId, () => {
-      this.db.prepare(`UPDATE items SET status = 'removed', finished_at = ? WHERE channel_id = ? AND queue = ? AND status = 'queued'`).run(this.now(), channelId, QUEUE);
+      this.db.prepare(`UPDATE items SET status = 'removed', finished_at = ? WHERE channel_id = ? AND queue = ? AND status = 'queued'`).run(this.now(), channelId, kind);
     });
   }
 
@@ -439,60 +666,74 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
 
   // ---- internals ------------------------------------------------------------------------------
 
-  /** Removes matching queued/playing items. If the playing one goes, the next one starts. */
+  /** Removes matching queued/playing items, in both lists. If a playing one goes, the next one starts. */
   private removeWhere(channelId: number, where: string, ...args: unknown[]): number {
-    const current = this.currentId(channelId);
+    const current = KINDS.map((k) => this.currentId(channelId, k));
     const ids = (
       this.db
-        .prepare(`SELECT id FROM items WHERE channel_id = ? AND queue = ? AND status IN ('queued','playing') AND ${where}`)
-        .all(channelId, QUEUE, ...args) as { id: number }[]
+        .prepare(`SELECT id FROM items WHERE channel_id = ? AND status IN ('queued','playing') AND ${where}`)
+        .all(channelId, ...args) as { id: number }[]
     ).map((r) => r.id);
     if (!ids.length) return 0;
     const set = this.db.prepare(`UPDATE items SET status = 'removed', finished_at = ? WHERE id = ?`);
     for (const id of ids) set.run(this.now(), id);
-    if (current !== null && ids.includes(current)) this.startFirstQueued(channelId);
+    KINDS.forEach((k, i) => {
+      const c = current[i];
+      if (c != null && ids.includes(c)) this.startFirstQueued(channelId, k);
+    });
     return ids.length;
   }
 
-  private finishCurrent(channelId: number, as: ItemStatus) {
-    this.db
-      .prepare(`UPDATE items SET status = ?, finished_at = ? WHERE channel_id = ? AND queue = ? AND status = 'playing'`)
-      .run(as, this.now(), channelId, QUEUE);
+  private finishCurrent(channelId: number, as: ItemStatus, kind: QueueKind) {
+    const id = this.currentId(channelId, kind);
+    if (id === null) return;
+    this.startedAt.delete(id);
+    this.db.prepare(`UPDATE items SET status = ?, finished_at = ? WHERE id = ?`).run(as, this.now(), id);
   }
 
-  private startFirstQueued(channelId: number) {
+  private startFirstQueued(channelId: number, kind: QueueKind) {
     const first = this.db
       .prepare(`SELECT id FROM items WHERE channel_id = ? AND queue = ? AND status = 'queued' ORDER BY position, id LIMIT 1`)
-      .get(channelId, QUEUE) as { id: number } | undefined;
-    if (first) this.db.prepare(`UPDATE items SET status = 'playing' WHERE id = ?`).run(first.id);
+      .get(channelId, kind) as { id: number } | undefined;
+    if (first) this.setPlaying(first.id);
   }
 
-  private currentId(channelId: number): number | null {
+  private setPlaying(itemId: number) {
+    this.db.prepare(`UPDATE items SET status = 'playing', finished_at = NULL WHERE id = ?`).run(itemId);
+    this.startedAt.set(itemId, this.now());
+  }
+
+  private currentId(channelId: number, kind: QueueKind): number | null {
     const row = this.db
       .prepare(`SELECT id FROM items WHERE channel_id = ? AND queue = ? AND status = 'playing' ORDER BY id DESC LIMIT 1`)
-      .get(channelId, QUEUE) as { id: number } | undefined;
+      .get(channelId, kind) as { id: number } | undefined;
     return row?.id ?? null;
   }
 
   /** Next queue position, above everything queued and every ticket already handed out. */
-  private ticket(channelId: number): number {
+  private ticket(channelId: number, kind: QueueKind): number {
     const { m } = this.db
       .prepare(`SELECT COALESCE(MAX(position), 0) AS m FROM items WHERE channel_id = ? AND queue = ? AND status = 'queued'`)
-      .get(channelId, QUEUE) as { m: number };
-    const t = Math.max(m, this.lastTicket.get(channelId) ?? 0) + 1;
-    this.lastTicket.set(channelId, t);
+      .get(channelId, kind) as { m: number };
+    const key = `${channelId}:${kind}`;
+    const t = Math.max(m, this.lastTicket.get(key) ?? 0) + 1;
+    this.lastTicket.set(key, t);
     return t;
   }
 
-  private minPosition(channelId: number): number {
+  private minPosition(channelId: number, kind: QueueKind): number {
     const { m } = this.db
       .prepare(`SELECT COALESCE(MIN(position), 1) AS m FROM items WHERE channel_id = ? AND queue = ? AND status = 'queued'`)
-      .get(channelId, QUEUE) as { m: number };
+      .get(channelId, kind) as { m: number };
     return m;
   }
 
+  private itemRow(channelId: number, itemId: number): ItemRow | null {
+    return (this.db.prepare(`SELECT * FROM items WHERE id = ? AND channel_id = ?`).get(itemId, channelId) as ItemRow | undefined) ?? null;
+  }
+
   private item(channelId: number, itemId: number): QueueItem | null {
-    const row = this.db.prepare(`SELECT * FROM items WHERE id = ? AND channel_id = ?`).get(itemId, channelId) as ItemRow | undefined;
+    const row = this.itemRow(channelId, itemId);
     return row ? toItem(row) : null;
   }
 
@@ -503,7 +744,7 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     const s = readSettings(row.settings);
     if (!s.open) return "closed";
     if (!s.providers.includes(provider)) return "provider_disabled";
-    if (this.isBanned(channelId, who.username, who.id)) return "banned";
+    if (!isBroadcaster(who) && this.isBanned(channelId, who.username, who.id)) return "banned";
     if (!hasAccess(s, provider, who.badges)) return "not_allowed";
     return null;
   }
@@ -535,7 +776,7 @@ function readSettings(json: string): QueueSettings {
     stored = JSON.parse(json);
   } catch {}
   const saved = (typeof stored === "object" && stored ? stored : {}) as Partial<QueueSettings>;
-  const merged = { ...DEFAULT_SETTINGS, ...saved };
+  const merged = { ...DEFAULT_SETTINGS, ...saved, songs: { ...DEFAULT_SETTINGS.songs, ...saved.songs } };
   // Settings saved before Instagram existed have no `access` field: turn Instagram on for them once.
   // After the next save, `access` is present and the streamer's choice sticks.
   if (saved.providers && !("access" in saved) && !merged.providers.includes("instagram")) {
@@ -552,6 +793,7 @@ function toChannel(row: ChannelRow): ChannelInfo {
 function toItem(r: ItemRow): QueueItem {
   return {
     id: r.id,
+    queue: r.queue,
     provider: r.provider,
     clipId: r.clip_id,
     url: r.url,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { QueueSettings, QueueState, ServerMessage } from "../shared/types";
+import type { QueueKind, QueueSettings, QueueState, ServerMessage, SongSettings } from "../shared/types";
 
 export class ApiError extends Error {
   constructor(
@@ -10,7 +10,7 @@ export class ApiError extends Error {
   }
 }
 
-async function post(path: string, body?: unknown) {
+export async function post(path: string, body?: unknown) {
   const res = await fetch(path, {
     method: "POST",
     headers: body === undefined ? {} : { "content-type": "application/json" },
@@ -22,17 +22,21 @@ async function post(path: string, body?: unknown) {
   }
 }
 
+/** A settings change. Song settings can be changed one field at a time too. */
+export type SettingsPatch = Partial<Omit<QueueSettings, "songs">> & { songs?: Partial<SongSettings> };
+
 export const api = {
   async config(): Promise<{ oauth: boolean; devLogin: boolean }> {
     return (await fetch("/api/config")).json();
   },
-  next: (skip = false) => post("/api/queue/next", { skip }),
-  previous: () => post("/api/queue/previous"),
+  /** `ifCurrent`: only advance if that item is still playing (a player reporting its end). */
+  next: (skip = false, kind: QueueKind = "clips", ifCurrent?: number) => post("/api/queue/next", { skip, kind, ifCurrent }),
+  previous: (kind: QueueKind = "clips") => post("/api/queue/previous", { kind }),
   play: (id: number) => post("/api/queue/play", { id }),
   remove: (id: number) => post("/api/queue/remove", { id }),
   move: (id: number, index: number) => post("/api/queue/move", { id, index }),
-  clear: () => post("/api/queue/clear"),
-  settings: (patch: Partial<QueueSettings>) => post("/api/settings", patch),
+  clear: (kind: QueueKind = "clips") => post("/api/queue/clear", { kind }),
+  settings: (patch: SettingsPatch) => post("/api/settings", patch),
   chatroom: (chatroomId: number) => post("/api/chatroom", { chatroomId }),
   /** minutes = null bans for good */
   ban: (username: string, minutes: number | null) => post("/api/bans", { username, minutes }),

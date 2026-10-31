@@ -27,6 +27,8 @@ export async function registerSite(app: FastifyInstance, webRoot: string, sessio
   const landingEn = withVerification(page("index.html"));
   const landingFa = withVerification(page("fa/index.html"));
   const dashboard = page("app/index.html");
+  const songPage = page("s/index.html");
+  const obsPage = page("obs/index.html");
 
   await app.register(fastifyStatic, {
     root: webRoot,
@@ -50,10 +52,13 @@ export async function registerSite(app: FastifyInstance, webRoot: string, sessio
   app.get("/fa", (_req, reply) => reply.redirect("/fa/", 301));
   app.get("/app", (_req, reply) => reply.redirect("/app/", 301));
   app.get("/app/", html(dashboard));
+  // One page for every channel's song list; it reads the channel from the URL.
+  app.get("/s/:slug", html(songPage));
+  app.get("/obs/", html(obsPage));
 
   app.get("/robots.txt", (_req, reply) =>
     reply.type("text/plain").send(
-      ["User-agent: *", "Allow: /", "Disallow: /app/", "Disallow: /api/", "Disallow: /auth/", `Sitemap: ${config.publicUrl}/sitemap.xml`, ""].join("\n"),
+      ["User-agent: *", "Allow: /", "Disallow: /app/", "Disallow: /api/", "Disallow: /auth/", "Disallow: /obs/", `Sitemap: ${config.publicUrl}/sitemap.xml`, ""].join("\n"),
     ),
   );
 

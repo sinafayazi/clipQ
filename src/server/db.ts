@@ -114,6 +114,16 @@ const MIGRATIONS = [
     INSERT INTO sync_deletes VALUES ((SELECT seq FROM sync_clock), 'bot_tokens', OLD.id);
   END;
   `,
+  // Viewers logged in on the song page (to see and change their own songs). Not synced to Turso:
+  // after a restart on a wiped disk they just log in again.
+  `
+  CREATE TABLE viewer_sessions (
+    id          TEXT PRIMARY KEY,
+    user_id     INTEGER NOT NULL,
+    username    TEXT NOT NULL,
+    expires_at  INTEGER NOT NULL
+  );
+  `,
 ];
 
 function revTriggers(table: string) {

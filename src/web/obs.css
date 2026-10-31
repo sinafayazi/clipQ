@@ -1,0 +1,33 @@
+/* OBS browser source: transparent page, the player fills it. */
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.obs-player {
+  width: 100%;
+  height: 100%;
+  display: flex;
+}
+
+.obs-player iframe,
+.obs-player .yt-host,
+.obs-player .yt-host iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.obs-note {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  font: 600 14px/1.3 system-ui, sans-serif;
+  color: #f6ead9;
+  background: rgb(12 6 7 / 0.7);
+  display: inline-block;
+}

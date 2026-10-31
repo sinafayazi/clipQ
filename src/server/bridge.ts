@@ -1,9 +1,10 @@
 import type { FastifyBaseLogger } from "fastify";
-import type { Provider, QueueItem } from "../shared/types.js";
+import type { Provider, QueueItem, QueueKind } from "../shared/types.js";
 import { findClips } from "./clips/parse.js";
 import type { KickBot } from "./kick/bot.js";
 import type { ChatMessage, KickChat } from "./kick/chat.js";
 import { MAX_TIMEOUT_MS, type QueueService } from "./queue/service.js";
+import { songCommands } from "./songs/commands.js";
 
 /** Most links taken from one message; the per-user limit usually cuts it lower. */
 const MAX_LINKS_PER_MESSAGE = 5;
@@ -15,11 +16,12 @@ const HELP_COOLDOWN_MS = 30_000;
 
 /** The command list the bot posts for `!cq commands`. */
 export function commandsText(voteSkip: number): string {
-  const vote = voteSkip > 0 ? `!vs votes to skip the playing clip (${voteSkip} votes skip it).` : "Vote skip is off.";
+  const vote = voteSkip > 0 ? `!vs votes to skip the clip (${voteSkip} votes).` : "";
   return (
-    `clipQ: post a clip link in chat to add it to the queue. ${vote} ` +
-    `Mods: !cq open, !cq close, !cq next, !cq skip, !cq prev, !cq clear, !cq ban <user>, !cq timeout <user> [10m], !cq unban <user>.`
-  );
+    `clipQ: post a clip link to queue it. ${vote} ` +
+    `Songs: !sr <link or name>, !song, !mysong, !wrongsong, !songs, !voteskip. ` +
+    `Mods: !cq open/close/next/skip/prev/clear, !cq ban/unban <user>, !cq timeout <user> [10m], !songs open/close/skip/clear, !songs remove <user>, !volume <0-100>.`
+  ).replace(/\s+/g, " ");
 }
 
 const PROVIDER_NAME: Record<Provider, string> = {
@@ -34,7 +36,7 @@ const PROVIDER_NAME: Record<Provider, string> = {
 
 function shortTitle(item: QueueItem): string {
   const t = item.title?.trim();
-  if (!t) return `the ${PROVIDER_NAME[item.provider]} clip`;
+  if (!t) return item.queue === "songs" ? "the song" : `the ${PROVIDER_NAME[item.provider]} clip`;
   return `"${t.length > 60 ? `${t.slice(0, 59)}…` : t}"`;
 }
 
@@ -49,9 +51,17 @@ export function parseDuration(text: string): number | null {
 }
 
 /** Wires Kick chat into the queues: links become requests, mod actions remove them. */
-export function bridgeChat(chat: KickChat, queues: QueueService, bot: KickBot, log: FastifyBaseLogger) {
-  const voteReply = new Map<number, { timer: NodeJS.Timeout; text: string }>();
+export function bridgeChat(
+  chat: KickChat,
+  queues: QueueService,
+  bot: KickBot,
+  log: FastifyBaseLogger,
+  publicUrl: string,
+  superUsers: ReadonlySet<string> = new Set(),
+) {
+  const voteReply = new Map<string, { timer: NodeJS.Timeout; text: string }>();
   const lastHelp = new Map<number, number>();
+  const songs = songCommands({ queues, bot, log, publicUrl, vote: (id, msg) => vote(id, msg, "songs") });
 
   chat.on("message", (msg) => {
     onMessage(msg).catch((err) => log.error({ err }, "chat message handling failed"));
@@ -72,13 +82,17 @@ export function bridgeChat(chat: KickChat, queues: QueueService, bot: KickBot, l
     for (const c of queues.channels()) queues.emit("changed", c.id);
   });
 
-  async function onMessage(msg: ChatMessage) {
-    const channel = queues.channelByChatroom(msg.chatroomId);
+  async function onMessage(raw: ChatMessage) {
+    const channel = queues.channelByChatroom(raw.chatroomId);
     if (!channel) return;
+    // Super users act as the broadcaster everywhere, so every permission check lets them through.
+    const msg = superUsers.has(raw.sender.username.toLowerCase())
+      ? { ...raw, sender: { ...raw.sender, badges: [...raw.sender.badges, "broadcaster"] } }
+      : raw;
 
     const text = msg.content.trim();
     if (text.startsWith("!")) {
-      runCommand(channel.id, msg, text);
+      if (!songs(channel, msg, text)) runCommand(channel.id, msg, text);
       return;
     }
 
@@ -91,29 +105,33 @@ export function bridgeChat(chat: KickChat, queues: QueueService, bot: KickBot, l
     }
   }
 
-  /** `!vs`: one vote to skip the playing clip. The bot answers with the count. */
-  function vote(channelId: number, msg: ChatMessage) {
-    const r = queues.voteSkip(channelId, msg.sender.id);
+  /** `!vs` (clips) or `!voteskip` (songs): one vote to skip what's playing. The bot answers with the count. */
+  function vote(channelId: number, msg: ChatMessage, kind: QueueKind = "clips") {
+    const r = queues.voteSkip(channelId, msg.sender.id, kind);
     if (!("item" in r) || r.status === "already_voted") return;
-    const pending = voteReply.get(channelId);
+    const key = `${channelId}:${kind}`;
+    const pending = voteReply.get(key);
     if (r.status === "skipped") {
       if (pending) clearTimeout(pending.timer);
-      voteReply.delete(channelId);
+      voteReply.delete(key);
       void bot.say(channelId, `Skipped ${shortTitle(r.item)} by vote (${r.votes}/${r.needed}).`);
       return;
     }
-    const text = `Vote skip for ${shortTitle(r.item)}: ${r.votes}/${r.needed}. Type !vs to vote.`;
+    const command = kind === "songs" ? "!voteskip" : "!vs";
+    const text = `Vote skip for ${shortTitle(r.item)}: ${r.votes}/${r.needed}. Type ${command} to vote.`;
     if (pending) {
       pending.text = text;
       return;
     }
     const timer = setTimeout(() => {
-      const reply = voteReply.get(channelId);
-      voteReply.delete(channelId);
-      // The clip may have changed while we waited; don't post a count for a clip that's gone.
-      if (reply && queues.state(channelId, false).current?.id === r.item.id) void bot.say(channelId, reply.text);
+      const reply = voteReply.get(key);
+      voteReply.delete(key);
+      // It may have changed while we waited; don't post a count for something that's gone.
+      const s = queues.state(channelId, false);
+      const now = kind === "songs" ? s.songs.current : s.current;
+      if (reply && now?.id === r.item.id) void bot.say(channelId, reply.text);
     }, VOTE_REPLY_DELAY_MS);
-    voteReply.set(channelId, { timer, text });
+    voteReply.set(key, { timer, text });
   }
 
   /**

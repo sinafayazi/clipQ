@@ -12,7 +12,9 @@ import { KickChat } from "./kick/chat.js";
 import { QueueService } from "./queue/service.js";
 import { registerRoutes } from "./routes.js";
 import { registerSite } from "./site.js";
-import { Sessions } from "./sessions.js";
+import { obsUrl } from "./songs/obs.js";
+import { resolveSong } from "./songs/resolve.js";
+import { Sessions, ViewerSessions } from "./sessions.js";
 import { TursoSync } from "./sync.js";
 import { createClient } from "@libsql/client";
 
@@ -30,14 +32,15 @@ if (config.turso) {
   sync.start();
 }
 
-const queues = new QueueService(db, resolveClip);
+const queues = new QueueService(db, resolveClip, Date.now, { resolve: resolveSong, obsUrl });
 const sessions = new Sessions(db);
+const viewers = new ViewerSessions(db);
 const chat = new KickChat({ ...config.pusher, log: { info: (m) => app.log.info(m), warn: (m) => app.log.warn(m) } });
 
 const bot = new KickBot(db, config.oauth, { info: (m) => app.log.info(m), warn: (m) => app.log.warn(m) });
 
-bridgeChat(chat, queues, bot, app.log);
-registerRoutes(app, { queues, chat, sessions, bot });
+bridgeChat(chat, queues, bot, app.log, config.publicUrl, config.superUsers);
+registerRoutes(app, { queues, chat, sessions, viewers, bot });
 
 // The built site. In dev, Vite serves it and proxies the API here.
 await registerSite(app, join(dirname(fileURLToPath(import.meta.url)), "../web"), sessions);

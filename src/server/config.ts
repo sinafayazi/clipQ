@@ -31,6 +31,21 @@ export const config = {
   devLogin: env("DEV_LOGIN", "0") === "1",
   /** Google Search Console "HTML tag" token. Accepts the bare token or "google-site-verification=<token>". */
   googleSiteVerification: (process.env.GOOGLE_SITE_VERIFICATION ?? "").trim().replace(/^google-site-verification=/, "") || null,
+  /**
+   * Kick usernames treated like the broadcaster in every channel's chat: all mod commands, every
+   * platform and song limit lifted. Comma-separated; the clipQ owner by default.
+   */
+  superUsers: new Set(
+    (process.env.SUPER_USERS ?? "siiinfa")
+      .split(",")
+      .map((u) => u.trim().replace(/^@/, "").toLowerCase())
+      .filter(Boolean),
+  ),
+  /**
+   * Signs the OBS player links. Defaults to the Kick client secret, so it's stable across restarts
+   * without another env var; changing it invalidates every OBS link.
+   */
+  linkSecret: process.env.LINK_SECRET?.trim() || process.env.KICK_CLIENT_SECRET?.trim() || "clipq-dev-secret",
   /** Optional copy of the database in Turso, for hosts whose disk is wiped on restart. */
   turso: process.env.TURSO_DATABASE_URL?.trim()
     ? { url: env("TURSO_DATABASE_URL"), authToken: process.env.TURSO_AUTH_TOKEN?.trim() || undefined }

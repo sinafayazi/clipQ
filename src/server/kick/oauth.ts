@@ -7,7 +7,9 @@ const AUTHORIZE = "https://id.kick.com/oauth/authorize";
 const TOKEN = "https://id.kick.com/oauth/token";
 const API = "https://api.kick.com/public/v1";
 // chat:write lets clipQ's bot reply in the streamer's chat (vote counts, the command list).
-const SCOPES = "user:read channel:read chat:write";
+export const STREAMER_SCOPES = "user:read channel:read chat:write";
+/** Viewers logging in on a song page: just who they are. */
+export const VIEWER_SCOPES = "user:read";
 
 export interface Tokens {
   accessToken: string;
@@ -29,12 +31,12 @@ export function createPkce() {
   return { verifier, challenge, state };
 }
 
-export function authorizeUrl(cfg: OAuthConfig, challenge: string, state: string) {
+export function authorizeUrl(cfg: OAuthConfig, challenge: string, state: string, scope = STREAMER_SCOPES) {
   const q = new URLSearchParams({
     response_type: "code",
     client_id: cfg.clientId,
     redirect_uri: cfg.redirectUri,
-    scope: SCOPES,
+    scope,
     code_challenge: challenge,
     code_challenge_method: "S256",
     state,
@@ -78,6 +80,16 @@ async function tokenRequest(params: Record<string, string>): Promise<Tokens> {
     // Seconds; assume an hour if Kick leaves it out.
     expiresAt: Date.now() + (Number(body.expires_in) || 3600) * 1000,
   };
+}
+
+/** The logged-in user's id and name. */
+export async function fetchUser(accessToken: string): Promise<{ id: number; username: string }> {
+  const users = await getJson<{ data: { user_id: number; name: string }[] }>(`${API}/users`, {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  const user = users.data[0];
+  if (!user) throw new Error("Kick returned no user");
+  return { id: user.user_id, username: user.name };
 }
 
 /** The logged-in user's id and channel slug. */

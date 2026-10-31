@@ -41,3 +41,40 @@ export class Sessions {
     reply.clearCookie(SESSION_COOKIE, { path: "/" });
   }
 }
+
+export const VIEWER_COOKIE = "clipq_viewer";
+
+export interface Viewer {
+  id: number;
+  username: string;
+}
+
+/** Viewers logged in with Kick on a song page. Separate from streamer sessions: a viewer controls nothing but their own songs. */
+export class ViewerSessions {
+  constructor(private readonly db: Db) {
+    db.prepare(`DELETE FROM viewer_sessions WHERE expires_at < ?`).run(Date.now());
+  }
+
+  create(reply: FastifyReply, viewer: Viewer) {
+    const id = randomBytes(32).toString("base64url");
+    const expires = Date.now() + TTL_MS;
+    this.db.prepare(`INSERT INTO viewer_sessions (id, user_id, username, expires_at) VALUES (?, ?, ?, ?)`).run(id, viewer.id, viewer.username, expires);
+    reply.setCookie(VIEWER_COOKIE, id, { path: "/", httpOnly: true, sameSite: "lax", secure: config.secureCookies, expires: new Date(expires) });
+  }
+
+  viewer(req: FastifyRequest): Viewer | null {
+    const id = req.cookies[VIEWER_COOKIE];
+    if (!id) return null;
+    const row = this.db.prepare(`SELECT user_id, username, expires_at FROM viewer_sessions WHERE id = ?`).get(id) as
+      | { user_id: number; username: string; expires_at: number }
+      | undefined;
+    if (!row || row.expires_at < Date.now()) return null;
+    return { id: row.user_id, username: row.username };
+  }
+
+  destroy(req: FastifyRequest, reply: FastifyReply) {
+    const id = req.cookies[VIEWER_COOKIE];
+    if (id) this.db.prepare(`DELETE FROM viewer_sessions WHERE id = ?`).run(id);
+    reply.clearCookie(VIEWER_COOKIE, { path: "/" });
+  }
+}

@@ -428,3 +428,150 @@ describe("settings migration", () => {
     expect(s.settings(1).providers).toEqual(["kick"]);
   });
 });
+
+describe("song requests", () => {
+  // A fake lookup: "id:seconds" or "id" (3 minutes). "missing" isn't found.
+  const lookups: string[] = [];
+  let s: QueueService;
+  const song = (text: string) => ({ type: "search" as const, text });
+  const req = (text: string, who: Requester = alice, badges: string[] = []) => s.requestSong(CH, song(text), who, null, badges);
+  const titles = () => s.state(CH, true).songs.queue.map((i) => i.clipId);
+  const playing = () => s.state(CH, true).songs.current?.clipId ?? null;
+
+  beforeEach(() => {
+    lookups.length = 0;
+    s = new QueueService(openDb(":memory:"), (ref) => resolver(ref), () => clock, {
+      resolve: async (q) => {
+        const text = q.type === "search" ? q.text : "";
+        lookups.push(text);
+        if (text === "missing") return { ok: false, reason: "not_found" };
+        const [id, secs] = text.split(":");
+        const v = { id: id!.padEnd(11, "x"), title: `Song ${id}`, author: null, duration: secs ? Number(secs) : 180, thumbnail: "", start: null };
+        return { ok: true, video: v };
+      },
+      obsUrl: (id) => `http://x/obs/?c=${id}`,
+    });
+    s.upsertChannel({ id: CH, slug: "erph", displayName: "Erph", chatroomId: 555 }, CH);
+    s.updateSettings(CH, { open: true, songs: { ...s.settings(CH).songs, open: true } });
+  });
+
+  it("are closed by default, with sensible defaults", () => {
+    const fresh = new QueueService(openDb(":memory:"), resolver);
+    fresh.upsertChannel({ id: 1, slug: "a", displayName: "A", chatroomId: 1 }, 1);
+    expect(fresh.settings(1).songs).toEqual({
+      open: false, maxSize: 50, perUserLimit: 2, maxDuration: 600, voteSkip: 10, access: ["everyone"], player: "dashboard", volume: 60,
+    });
+  });
+
+  it("the first song starts right away; the rest wait in order; clips are untouched", async () => {
+    expect((await req("a")).ok).toBe(true);
+    expect((await req("b", bob)).ok).toBe(true);
+    expect((await req("c", { ...bob, id: 3, username: "cara" })).ok).toBe(true);
+    expect(playing()).toMatch(/^a/);
+    expect(titles().map((t) => t[0])).toEqual(["b", "c"]);
+    expect(s.state(CH, true).queue).toEqual([]);
+    expect(s.state(CH, true).current).toBeNull();
+    s.next(CH); // clips: nothing happens to songs
+    expect(playing()).toMatch(/^a/);
+    s.next(CH, "played", "songs");
+    expect(playing()).toMatch(/^b/);
+  });
+
+  it("enforces closed, duplicates, the per-viewer limit, length and who can request", async () => {
+    await req("a");
+    expect(await req("a", bob)).toEqual({ ok: false, reason: "duplicate" }); // a is playing
+    await req("b");
+    await req("c"); // alice: a playing, b and c waiting (the default limit is 2)
+    expect(await req("c2")).toEqual({ ok: false, reason: "user_limit" });
+    expect(await req("long:900", bob)).toEqual({ ok: false, reason: "too_long" });
+    expect(await req("missing", bob)).toEqual({ ok: false, reason: "not_found" });
+    s.updateSettings(CH, { songs: { ...s.settings(CH).songs, access: ["vip"] } });
+    expect(await req("d", bob)).toEqual({ ok: false, reason: "not_allowed" });
+    expect((await req("d", bob, ["vip"])).ok).toBe(true);
+    s.updateSettings(CH, { songs: { ...s.settings(CH).songs, open: false } });
+    expect(await req("e", bob, ["vip"])).toEqual({ ok: false, reason: "closed" });
+  });
+
+  it("counts only waiting songs toward the per-viewer limit", async () => {
+    s.updateSettings(CH, { songs: { ...s.settings(CH).songs, perUserLimit: 1 } });
+    expect((await req("a")).ok).toBe(true); // playing, not waiting
+    expect((await req("b")).ok).toBe(true);
+    expect(await req("c")).toEqual({ ok: false, reason: "user_limit" });
+  });
+
+  it("the broadcaster (and super users, who chat as one) skip the per-viewer limit, access and bans", async () => {
+    s.updateSettings(CH, { songs: { ...s.settings(CH).songs, perUserLimit: 1, access: ["vip"] } });
+    s.ban(CH, "alice", null);
+    const boss = ["broadcaster"];
+    expect((await req("a", alice, boss)).ok).toBe(true);
+    expect((await req("b", alice, boss)).ok).toBe(true);
+    expect((await req("c", alice, boss)).ok).toBe(true);
+    expect(await req("d", alice)).toEqual({ ok: false, reason: "banned" });
+  });
+
+  it("knows when each song will start", async () => {
+    await req("a:200");
+    await req("b:100", bob);
+    await req("c:60", { ...bob, id: 3, username: "cara" });
+    clock += 50_000; // 50 s into a
+    const tl = s.songTimeline(CH);
+    expect(tl.left).toBe(150);
+    expect(tl.queue.map((q) => q.startsIn)).toEqual([150, 250]);
+  });
+
+  it("a viewer can change a waiting song in place, or remove it; only their own", async () => {
+    await req("a");
+    await req("b", bob);
+    await req("c", { ...bob, id: 3, username: "cara" });
+    const b = s.state(CH, true).songs.queue[0]!;
+    expect(await s.replaceSong(CH, b.id, { id: alice.id, username: "alice" }, song("x"))).toEqual({ ok: false, reason: "not_found" });
+    expect((await s.replaceSong(CH, b.id, { id: bob.id, username: "bob" }, song("z"))).ok).toBe(true);
+    expect(titles().map((t) => t[0])).toEqual(["z", "c"]); // same place
+    expect(s.removeOwnSong(CH, b.id, alice.id)).toBe(false);
+    expect(s.removeOwnSong(CH, b.id, bob.id)).toBe(true);
+    expect(titles().map((t) => t[0])).toEqual(["c"]);
+  });
+
+  it("!wrongsong removes the viewer's latest waiting song", async () => {
+    await req("a");
+    await req("b");
+    await req("c");
+    expect(s.wrongSong(CH, alice.id)?.clipId).toMatch(/^c/);
+    expect(titles().map((t) => t[0])).toEqual(["b"]);
+    expect(s.wrongSong(CH, bob.id)).toBeNull();
+  });
+
+  it("bans and deleted messages remove songs too; vote skip is separate from clips", async () => {
+    s.updateSettings(CH, { songs: { ...s.settings(CH).songs, voteSkip: 2 } });
+    await req("a");
+    await req("b", bob);
+    expect(s.voteSkip(CH, 10, "songs")).toMatchObject({ status: "counted", votes: 1, needed: 2 });
+    expect(s.voteSkip(CH, 10).status).toBe("nothing_playing"); // clips
+    expect(s.voteSkip(CH, 11, "songs")).toMatchObject({ status: "skipped" });
+    expect(playing()).toMatch(/^b/);
+    s.ban(CH, "bob", null);
+    expect(playing()).toBeNull();
+  });
+
+  it("the public page shows the queue and the viewer's own songs", async () => {
+    await req("a:120");
+    await req("b:60", bob);
+    await req("c:60");
+    s.next(CH, "played", "songs"); // a done
+    const pub = s.publicSongs(CH, { id: alice.id, username: "alice" });
+    expect(pub.current?.title).toBe("Song b");
+    expect(pub.queue.map((q) => q.title)).toEqual(["Song c"]);
+    expect(pub.me?.queued.map((q) => q.title)).toEqual(["Song c"]);
+    expect(pub.me?.history.map((q) => q.title)).toEqual(["Song a"]);
+    expect(s.publicSongs(CH, null).me).toBeNull();
+  });
+
+  it("settings saved before songs existed get the song defaults", () => {
+    const db = openDb(":memory:");
+    const fresh = new QueueService(db, resolver);
+    fresh.upsertChannel({ id: 1, slug: "a", displayName: "A", chatroomId: 1 }, 1);
+    db.prepare(`UPDATE channels SET settings = ? WHERE id = 1`).run(JSON.stringify({ open: true, voteSkip: 5 }));
+    expect(fresh.settings(1).voteSkip).toBe(5);
+    expect(fresh.settings(1).songs.maxDuration).toBe(600);
+  });
+});
