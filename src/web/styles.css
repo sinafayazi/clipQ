@@ -1444,3 +1444,8 @@ img {
   min-width: 2.6rem;
   font-variant-numeric: tabular-nums;
 }
+
+.now-ban {
+  margin-inline-start: auto;
+  color: var(--color-danger-text);
+}

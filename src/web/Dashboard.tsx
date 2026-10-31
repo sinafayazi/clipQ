@@ -170,6 +170,7 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
                 {current.duration != null ? ` · ${formatDuration(current.duration)}` : ""}
                 {settings.voteSkip > 0 && state.skipVotes > 0 ? ` · Skip votes ${state.skipVotes}/${settings.voteSkip}` : ""}
               </p>
+              <BanRequester username={current.requestedBy.username} onBan={setBanTarget} />
             </div>
           )}
           <div className="transport">
@@ -328,6 +329,7 @@ function SongsView({
               {current.duration != null ? ` · ${formatDuration(current.duration)}` : ""}
               {s.voteSkip > 0 && skipVotes > 0 ? ` · Skip votes ${skipVotes}/${s.voteSkip}` : ""}
             </p>
+            <BanRequester username={current.requestedBy.username} onBan={onBan} />
           </div>
         )}
         <div className="transport">
@@ -383,6 +385,16 @@ function SongsView({
         )}
       </aside>
     </>
+  );
+}
+
+/** Ban or time out whoever requested what's playing, without hunting for them in the queue. */
+function BanRequester({ username, onBan }: { username: string; onBan: (username: string) => void }) {
+  return (
+    <button type="button" className="btn btn-ghost icon-start now-ban" onClick={() => onBan(username)} title={`Ban or time out ${username}`}>
+      <BanIcon size={16} stroke={2} />
+      Ban {username}
+    </button>
   );
 }
 
