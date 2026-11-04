@@ -1,0 +1,216 @@
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("../fonts/PlusJakartaSans-VariableFont_wght.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  ascent-override: 90%;
+  descent-override: 22%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: IRANSans;
+  src: url("../fonts/IRANSansXVF.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  size-adjust: 92%;
+  unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  color: white;
+  font-family: IRANSans, var(--msg-font, "Plus Jakarta Sans", sans-serif);
+  overflow: hidden;
+}
+
+#status {
+  position: fixed;
+  top: 12px;
+  bottom: 12px;
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.7;
+  color: red;
+  text-shadow: 0 1px 2px black;
+  transition: opacity 0.3s ease;
+}
+
+#status.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#chat {
+  --msg-font: "Plus Jakarta Sans", sans-serif;
+  --msg-size: 20px;
+  --msg-body-size: calc(var(--msg-size) * 0.9);
+  --msg-weight: 600;
+  --msg-user-weight: 800;
+  --badge-size: calc(var(--msg-size) * 1);
+  --emote-height: 1.4em;
+  --fade-out-ms: 600ms;
+  --bg-opacity: 0;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-block: 7px;
+  padding-inline: 4px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background-color: rgb(0 0 0 / calc(var(--bg-opacity) * 1%));
+  font-family: IRANSans, var(--msg-font);
+}
+
+#chat[data-transparent="1"] {
+  gap: 10px;
+  --badge-size: calc(var(--msg-size) * 1.15);
+  --emote-height: 1.5em;
+}
+
+@keyframes msg-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes msg-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.55em);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes msg-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.msg {
+  font-size: var(--msg-size);
+  line-height: 1.2;
+  text-shadow: 0 1px 2px black;
+  word-break: break-word;
+  opacity: 1;
+  transform-origin: left center;
+  transition: opacity var(--fade-out-ms) ease;
+}
+
+#chat[data-anim="fade"] .msg {
+  animation: msg-fade-in 0.22s ease-out;
+}
+
+#chat[data-anim="slide"] .msg {
+  animation: msg-slide-in 0.28s cubic-bezier(0.2, 0, 0, 1);
+}
+
+#chat[data-anim="pop"] .msg {
+  animation: msg-pop-in 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+#chat[data-anim="none"] .msg {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #chat .msg {
+    animation: none !important;
+  }
+}
+
+.msg.is-fading {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.msg .badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 6px;
+  height: 1.2em;
+  vertical-align: middle;
+}
+
+.msg .badge-img {
+  width: var(--badge-size);
+  height: var(--badge-size);
+  display: block;
+  flex: 0 0 var(--badge-size);
+  object-fit: contain;
+  object-position: center;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6));
+}
+
+.msg .user {
+  font-family: IRANSans, var(--msg-font);
+  font-weight: var(--msg-user-weight);
+  margin-right: 6px;
+  vertical-align: middle;
+  position: relative;
+  top: 1px;
+}
+
+.msg .body {
+  font-size: var(--msg-body-size);
+  unicode-bidi: plaintext;
+  font-weight: var(--msg-weight);
+  vertical-align: middle;
+  position: relative;
+  top: 1px;
+}
+
+.msg .mention {
+  font-weight: var(--msg-user-weight);
+}
+
+.msg .emote {
+  display: inline-block;
+  height: var(--emote-height);
+  width: auto;
+  vertical-align: middle;
+  margin: 0 1px;
+}
+
+.msg .emote-stack {
+  position: relative;
+  display: inline-block;
+  height: var(--emote-height);
+  vertical-align: middle;
+  margin: 0 1px;
+}
+
+.msg .emote-stack .emote {
+  margin: 0;
+}
+
+.msg .emote-stack .emote.is-zero-width {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}

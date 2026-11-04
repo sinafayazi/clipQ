@@ -29,6 +29,9 @@ export async function registerSite(app: FastifyInstance, webRoot: string, sessio
   const dashboard = page("app/index.html");
   const songPage = page("s/index.html");
   const obsPage = page("obs/index.html");
+  const overlaysHub = page("overlays/index.html");
+  const overlayChat = page("overlays/chat/index.html");
+  const overlayStreak = page("overlays/emote-streak/index.html");
 
   await app.register(fastifyStatic, {
     root: webRoot,
@@ -55,10 +58,27 @@ export async function registerSite(app: FastifyInstance, webRoot: string, sessio
   // One page for every channel's song list; it reads the channel from the URL.
   app.get("/s/:slug", html(songPage));
   app.get("/obs/", html(obsPage));
+  // Overlay tools (session) + secret OBS browser sources (key in the link).
+  app.get("/overlays", (_req, reply) => reply.redirect("/overlays/", 301));
+  app.get("/overlays/", (req, reply) =>
+    sessions.channelId(req) !== null ? html(overlaysHub)(req, reply) : reply.redirect("/app/"),
+  );
+  app.get("/overlays/chat/", html(overlayChat));
+  app.get("/overlays/emote-streak/", html(overlayStreak));
 
   app.get("/robots.txt", (_req, reply) =>
     reply.type("text/plain").send(
-      ["User-agent: *", "Allow: /", "Disallow: /app/", "Disallow: /api/", "Disallow: /auth/", "Disallow: /obs/", `Sitemap: ${config.publicUrl}/sitemap.xml`, ""].join("\n"),
+      [
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /app/",
+        "Disallow: /api/",
+        "Disallow: /auth/",
+        "Disallow: /obs/",
+        "Disallow: /overlays/",
+        `Sitemap: ${config.publicUrl}/sitemap.xml`,
+        "",
+      ].join("\n"),
     ),
   );
 

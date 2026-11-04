@@ -124,6 +124,9 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
             </label>
           </div>
           <div className="topbar-tools">
+            <a className="btn btn-ghost" href="/overlays/">
+              Overlays
+            </a>
             <button type="button" className="btn btn-ghost icon-start" onClick={() => setSettingsOpen(true)}>
               <SettingsIcon size={18} stroke={2} />
               Settings
