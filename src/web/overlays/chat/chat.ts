@@ -5,10 +5,14 @@ import {
   clampFontSize,
   clampFontWeight,
   clampMaxMessages,
+  clampMessageGap,
   ensureGoogleFontStylesheet,
   fontStack,
   parseFadeIn,
   parseFont,
+  parseLayout,
+  parseShowPfp,
+  sanitizeBgColor,
   sanitizeGoogleFontFamily,
   type ChatLiveAppearance,
 } from "../chat-settings";
@@ -25,6 +29,7 @@ import "./chat.css";
 const params = new URLSearchParams(location.search);
 let maxMessages = clampMaxMessages(Number(params.get("max") || 40));
 let messageTtlMs = clampFadeOutMs(Number(params.get("ttl") || 35_000));
+let showPfp = parseShowPfp(params.get("pfp"));
 const messageFadeMs = 600;
 const demoMode = ["1", "true", "yes", "on"].includes((params.get("demo") || "").toLowerCase());
 
@@ -50,6 +55,9 @@ function applyLook(next: Partial<ChatLiveAppearance>) {
   const googleFamily =
     next.googleFontFamily != null ? sanitizeGoogleFontFamily(next.googleFontFamily) : undefined;
 
+  if (next.layout != null) {
+    chat.dataset.layout = parseLayout(next.layout);
+  }
   if (font != null || googleFamily != null) {
     const resolvedFont = font ?? parseFont(params.get("font"));
     const resolvedFamily =
@@ -73,10 +81,20 @@ function applyLook(next: Partial<ChatLiveAppearance>) {
   if (next.fadeIn != null) {
     chat.dataset.anim = parseFadeIn(next.fadeIn);
   }
+  if (next.bgColor != null) {
+    chat.style.setProperty("--bg-color", sanitizeBgColor(next.bgColor));
+  }
   if (next.bgOpacity != null) {
     const opacity = clampBgOpacity(next.bgOpacity);
     chat.style.setProperty("--bg-opacity", String(opacity));
     chat.dataset.transparent = opacity === 0 ? "1" : "0";
+  }
+  if (next.showPfp != null) {
+    showPfp = next.showPfp !== false;
+    chat.dataset.pfp = showPfp ? "1" : "0";
+  }
+  if (next.messageGap != null) {
+    chat.style.setProperty("--msg-gap", `${clampMessageGap(next.messageGap)}px`);
   }
   if (next.maxMessages != null) {
     maxMessages = clampMaxMessages(next.maxMessages);
@@ -85,13 +103,17 @@ function applyLook(next: Partial<ChatLiveAppearance>) {
 
 chat.style.setProperty("--fade-out-ms", `${messageFadeMs}ms`);
 applyLook({
+  layout: parseLayout(params.get("layout")),
   font: parseFont(params.get("font")),
   googleFontFamily: sanitizeGoogleFontFamily(params.get("ff")),
   fontSize: clampFontSize(Number(params.get("size") || 20)),
   fontWeight: clampFontWeight(Number(params.get("weight") || 600)),
   fadeOutMs: messageTtlMs,
   fadeIn: parseFadeIn(params.get("anim")),
+  bgColor: sanitizeBgColor(params.get("bgc")),
   bgOpacity: parseBgOpacityParam(params.get("bg")),
+  showPfp,
+  messageGap: clampMessageGap(Number(params.get("gap") ?? 8)),
   maxMessages,
 });
 
@@ -133,6 +155,8 @@ const globalBadgeFile: Record<string, string> = {
 
 /** @type {Map<string, string>} lowercase username → solid hex color */
 const userColors = new Map<string, string>();
+/** lowercase slug → pending/resolved custom profile pic URL (empty string = none) */
+const pfpCache = new Map<string, Promise<string>>();
 let sevenTv = new Map<string, SevenTvEmote>();
 let subBadges: SubscriberBadge[] = [];
 
@@ -140,8 +164,53 @@ function usernameOf(payload: any) {
   return payload?.sender?.username || payload?.username || "unknown";
 }
 
+function slugOf(payload: any) {
+  const explicit = payload?.sender?.slug || payload?.sender?.channel_slug || payload?.slug || "";
+  if (explicit) return String(explicit);
+  // WS payloads sometimes omit slug — Kick channel slugs match username
+  const username = usernameOf(payload);
+  if (!username || username === "unknown") return "";
+  return String(username).toLowerCase();
+}
+
 function identityOf(payload: any) {
   return payload?.sender?.identity || payload?.identity || {};
+}
+
+/** Kick placeholder avatars — treat as "no pfp". */
+function isCustomPfp(url: string) {
+  if (!url || typeof url !== "string") return false;
+  const u = url.trim();
+  if (!/^https?:\/\//i.test(u)) return false;
+  if (/\/default\d+-/i.test(u)) return false;
+  if (/user-profile-pic\.png/i.test(u)) return false;
+  return true;
+}
+
+async function resolvePfp(slug: string): Promise<string> {
+  const key = String(slug || "")
+    .trim()
+    .toLowerCase();
+  if (!key) return "";
+  const cached = pfpCache.get(key);
+  if (cached) return cached;
+
+  const pending = (async () => {
+    try {
+      const res = await fetch(`https://kick.com/api/v2/channels/${encodeURIComponent(key)}`, {
+        headers: { accept: "application/json" },
+      });
+      if (!res.ok) return "";
+      const data = await res.json();
+      const pic = String(data?.user?.profile_pic || "");
+      return isCustomPfp(pic) ? pic : "";
+    } catch {
+      return "";
+    }
+  })();
+
+  pfpCache.set(key, pending);
+  return pending;
 }
 
 function rememberUserColor(username: string, identity: any) {
@@ -192,12 +261,96 @@ function appendBadgeImg(parent: HTMLElement, src: string, alt: string) {
 }
 
 function ensureBadgesWrap(row: HTMLElement) {
-  let wrap = row.querySelector(":scope > .badges") as HTMLElement | null;
+  const head = row.querySelector(":scope > .msg-head") as HTMLElement | null;
+  const scope = head ?? row;
+  let wrap = scope.querySelector(":scope > .badges") as HTMLElement | null;
   if (wrap) return wrap;
   wrap = document.createElement("span");
   wrap.className = "badges";
-  row.prepend(wrap);
+  scope.prepend(wrap);
   return wrap;
+}
+
+function profilePicOf(payload: any): string {
+  const sender = payload?.sender || payload || {};
+  for (const key of ["profile_pic", "profile_picture", "profilePic", "avatar", "avatar_url"]) {
+    const value = sender[key];
+    if (typeof value === "string" && isCustomPfp(value)) return value.trim();
+  }
+  return "";
+}
+
+function initialOf(username: string) {
+  const trimmed = String(username || "").trim();
+  if (!trimmed) return "?";
+  return [...trimmed][0]!.toLocaleUpperCase();
+}
+
+function setAvatarPic(avatar: HTMLElement, username: string, picUrl: string) {
+  if (!picUrl || avatar.querySelector(".avatar-img")) return;
+  avatar.textContent = "";
+  avatar.classList.remove("is-letter");
+  const img = document.createElement("img");
+  img.className = "avatar-img";
+  img.src = picUrl;
+  img.alt = "";
+  img.decoding = "async";
+  img.addEventListener("error", () => {
+    img.remove();
+    avatar.textContent = initialOf(username);
+    avatar.classList.add("is-letter");
+  });
+  avatar.append(img);
+}
+
+function appendAvatar(parent: HTMLElement, username: string, color: string, picUrl: string) {
+  const avatar = document.createElement("span");
+  avatar.className = "avatar";
+  avatar.setAttribute("aria-hidden", "true");
+  if (color) avatar.style.setProperty("--user-color", color);
+
+  if (picUrl) setAvatarPic(avatar, username, picUrl);
+  else {
+    avatar.textContent = initialOf(username);
+    avatar.classList.add("is-letter");
+  }
+
+  parent.append(avatar);
+}
+
+function prependPfpBadge(row: HTMLElement, src: string, username: string) {
+  if (!src || !row.isConnected) return;
+  const wrap = ensureBadgesWrap(row);
+  if (wrap.querySelector(".badge-img.is-pfp")) return;
+  const img = document.createElement("img");
+  img.className = "badge-img is-pfp";
+  img.src = src;
+  img.alt = username || "avatar";
+  img.title = username || "avatar";
+  img.decoding = "async";
+  img.addEventListener("error", () => img.remove());
+  wrap.prepend(img);
+}
+
+function attachPfp(row: HTMLElement, payload: any) {
+  if (!showPfp) return;
+  const username = usernameOf(payload);
+  const apply = (src: string) => {
+    if (!showPfp || !src || !row.isConnected) return;
+    const avatar = row.querySelector(":scope > .avatar") as HTMLElement | null;
+    if (avatar) setAvatarPic(avatar, username, src);
+    prependPfpBadge(row, src, username);
+  };
+
+  const fromPayload = profilePicOf(payload);
+  if (fromPayload) {
+    apply(fromPayload);
+    return;
+  }
+
+  const slug = slugOf(payload);
+  if (!slug) return;
+  resolvePfp(slug).then(apply);
 }
 
 function appendV1Badge(wrap: HTMLElement, badge: any) {
@@ -370,26 +523,35 @@ function scheduleMessageExpiry(row: MsgEl) {
 
 function addMessage(payload: any) {
   const identity = identityOf(payload);
+  const username = usernameOf(payload);
+  const color = identity.color || identity.username_color || "";
+  rememberUserColor(username, identity);
+
   const row = document.createElement("div") as MsgEl;
   row.className = "msg";
+  if (color) row.style.setProperty("--user-color", color);
 
-  appendBadges(row, identity.badges || payload?.sender?.badges || [], identity.badges_v2 || payload?.sender?.badges_v2 || []);
+  appendAvatar(row, username, color, profilePicOf(payload));
+
+  const head = document.createElement("span");
+  head.className = "msg-head";
+  appendBadges(head, identity.badges || payload?.sender?.badges || [], identity.badges_v2 || payload?.sender?.badges_v2 || []);
 
   const name = document.createElement("span");
   name.className = "user";
-  const username = usernameOf(payload);
   name.textContent = username;
-  appendExtraUserBadges(row, username);
-  rememberUserColor(username, identity);
-  name.style.color = identity.color || identity.username_color || "";
+  if (color) name.style.color = color;
+  head.append(name);
 
   const body = document.createElement("span");
   body.className = "body";
   body.dir = "auto";
   appendContent(body, payload.content ?? "");
 
-  row.append(name, body);
+  row.append(head, body);
+  appendExtraUserBadges(row, username);
   chat.append(row);
+  attachPfp(row, payload);
   scheduleMessageExpiry(row);
 
   while (chat.children.length > maxMessages) removeMessage(chat.firstElementChild);
