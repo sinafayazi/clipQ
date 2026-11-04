@@ -4,10 +4,14 @@ export type ChatFadeIn = "fade" | "slide" | "pop" | "none";
 export type ChatPreviewSource = "fake" | "live";
 export type ChatFontPreset = "jakarta" | "source" | "bricolage" | "inter" | "rubik" | "system";
 export type ChatFont = ChatFontPreset | "custom";
+/** Message composition for the OBS chat overlay. `classic` is the original inline look. */
+export type ChatLayout = "classic" | "cards" | "portraits" | "stack" | "stripe";
 
 export interface ChatOverlaySettings {
   /** Preview-only: inject sample messages instead of Kick chat. */
   preview: ChatPreviewSource;
+  /** How each message is composed on the overlay. */
+  layout: ChatLayout;
   font: ChatFont;
   /** Pasted Google Fonts CSS / specimen / share URL (hub field only). */
   googleFontLink: string;
@@ -20,13 +24,20 @@ export interface ChatOverlaySettings {
   /** How long a message stays before fading out (ms). */
   fadeOutMs: number;
   fadeIn: ChatFadeIn;
-  /** Black panel opacity 0–100. 0 = fully transparent for OBS. */
+  /** Panel / plate color (hex). Used by the full chat panel and card-style plates. */
+  bgColor: string;
+  /** Panel opacity 0–100. 0 = fully transparent for OBS. */
   bgOpacity: number;
+  /** Show chatter profile pictures (badge or portraits avatar). */
+  showPfp: boolean;
+  /** Vertical space between messages in px. */
+  messageGap: number;
   maxMessages: number;
 }
 
 export const DEFAULT_CHAT_SETTINGS: ChatOverlaySettings = {
   preview: "fake",
+  layout: "classic",
   font: "jakarta",
   googleFontLink: "",
   googleFontFamily: "",
@@ -34,9 +45,22 @@ export const DEFAULT_CHAT_SETTINGS: ChatOverlaySettings = {
   fontWeight: 600,
   fadeOutMs: 35_000,
   fadeIn: "fade",
+  bgColor: "#000000",
   bgOpacity: 0,
+  showPfp: true,
+  messageGap: 8,
   maxMessages: 40,
 };
+
+export const LAYOUT_OPTIONS: { id: ChatLayout; label: string; hint: string }[] = [
+  { id: "classic", label: "Classic", hint: "Inline badges and name — the current look." },
+  { id: "cards", label: "Cards", hint: "Each line sits on its own dark plate." },
+  { id: "portraits", label: "Portraits", hint: "Large avatar beside name and message." },
+  { id: "stack", label: "Stack", hint: "Name on top, message underneath." },
+  { id: "stripe", label: "Stripe", hint: "User-color edge on a soft plate." },
+];
+
+const LAYOUT_IDS = new Set<string>(LAYOUT_OPTIONS.map((l) => l.id));
 
 export const FADE_IN_OPTIONS: { id: ChatFadeIn; label: string }[] = [
   { id: "fade", label: "Fade" },
@@ -76,8 +100,27 @@ export function clampMaxMessages(n: number) {
   return Math.min(100, Math.max(5, Math.round(n) || DEFAULT_CHAT_SETTINGS.maxMessages));
 }
 
+export function clampMessageGap(n: number) {
+  if (!Number.isFinite(n)) return DEFAULT_CHAT_SETTINGS.messageGap;
+  return Math.min(48, Math.max(0, Math.round(n)));
+}
+
 export function clampBgOpacity(n: number) {
   return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+/** Normalize to `#rrggbb`, or fall back to the default black. */
+export function sanitizeBgColor(raw: string | null | undefined): string {
+  if (!raw) return DEFAULT_CHAT_SETTINGS.bgColor;
+  const s = String(raw)
+    .trim()
+    .replace(/^#/, "");
+  if (/^[0-9a-fA-F]{6}$/.test(s)) return `#${s.toLowerCase()}`;
+  if (/^[0-9a-fA-F]{3}$/.test(s)) {
+    const [a, b, c] = s.toLowerCase();
+    return `#${a}${a}${b}${b}${c}${c}`;
+  }
+  return DEFAULT_CHAT_SETTINGS.bgColor;
 }
 
 export function parseFadeIn(raw: string | null): ChatFadeIn {
@@ -88,6 +131,20 @@ export function parseFadeIn(raw: string | null): ChatFadeIn {
 export function parseFont(raw: string | null): ChatFont {
   if (raw && FONT_IDS.has(raw)) return raw as ChatFont;
   return DEFAULT_CHAT_SETTINGS.font;
+}
+
+export function parseLayout(raw: string | null): ChatLayout {
+  if (raw && LAYOUT_IDS.has(raw)) return raw as ChatLayout;
+  return DEFAULT_CHAT_SETTINGS.layout;
+}
+
+/** Query/UI flag: default on. `0` / `false` / `off` disable. */
+export function parseShowPfp(raw: string | null | undefined): boolean {
+  if (raw == null || raw === "") return DEFAULT_CHAT_SETTINGS.showPfp;
+  const lower = String(raw).toLowerCase();
+  if (lower === "0" || lower === "false" || lower === "off" || lower === "no") return false;
+  if (lower === "1" || lower === "true" || lower === "on" || lower === "yes") return true;
+  return DEFAULT_CHAT_SETTINGS.showPfp;
 }
 
 export function sanitizeGoogleFontFamily(raw: string | null | undefined): string {
@@ -186,6 +243,9 @@ export function ensureGoogleFontStylesheet(family: string, doc: Document = docum
 export function chatObsQuery(settings: ChatOverlaySettings): string {
   const q = new URLSearchParams();
   q.set("bg", String(settings.bgOpacity));
+  const bgColor = sanitizeBgColor(settings.bgColor);
+  if (bgColor !== DEFAULT_CHAT_SETTINGS.bgColor) q.set("bgc", bgColor.slice(1));
+  if (settings.layout !== DEFAULT_CHAT_SETTINGS.layout) q.set("layout", settings.layout);
   if (settings.font === "custom" && settings.googleFontFamily) {
     q.set("font", "custom");
     q.set("ff", settings.googleFontFamily);
@@ -197,6 +257,8 @@ export function chatObsQuery(settings: ChatOverlaySettings): string {
   if (settings.fadeOutMs !== DEFAULT_CHAT_SETTINGS.fadeOutMs) q.set("ttl", String(settings.fadeOutMs));
   if (settings.fadeIn !== DEFAULT_CHAT_SETTINGS.fadeIn) q.set("anim", settings.fadeIn);
   if (settings.maxMessages !== DEFAULT_CHAT_SETTINGS.maxMessages) q.set("max", String(settings.maxMessages));
+  if (settings.messageGap !== DEFAULT_CHAT_SETTINGS.messageGap) q.set("gap", String(settings.messageGap));
+  if (!settings.showPfp) q.set("pfp", "0");
   const s = q.toString();
   return s ? `&${s}` : "";
 }
@@ -213,25 +275,33 @@ export function chatPreviewShellQuery(preview: ChatPreviewSource): string {
 export const CHAT_SETTINGS_MESSAGE = "clipq-chat-settings";
 
 export interface ChatLiveAppearance {
+  layout: ChatLayout;
   font: ChatFont;
   googleFontFamily: string;
   fontSize: number;
   fontWeight: number;
   fadeOutMs: number;
   fadeIn: ChatFadeIn;
+  bgColor: string;
   bgOpacity: number;
+  showPfp: boolean;
+  messageGap: number;
   maxMessages: number;
 }
 
 export function chatLiveAppearance(settings: ChatOverlaySettings): ChatLiveAppearance {
   return {
-    font: settings.font,
+    layout: parseLayout(settings.layout ?? null),
+    font: parseFont(settings.font ?? null),
     googleFontFamily: settings.font === "custom" ? settings.googleFontFamily : "",
     fontSize: settings.fontSize,
     fontWeight: settings.fontWeight,
     fadeOutMs: settings.fadeOutMs,
-    fadeIn: settings.fadeIn,
+    fadeIn: parseFadeIn(settings.fadeIn ?? null),
+    bgColor: sanitizeBgColor(settings.bgColor),
     bgOpacity: settings.bgOpacity,
+    showPfp: settings.showPfp !== false,
+    messageGap: clampMessageGap(settings.messageGap),
     maxMessages: settings.maxMessages,
   };
 }
@@ -248,6 +318,32 @@ export function withOverlayQuery(baseUrl: string, extra: string): string {
   const join = baseUrl.includes("?") ? "" : "?";
   // baseUrl already has ?c=&k=; extra starts with &
   return `${baseUrl}${extra.startsWith("&") ? extra : `${join}${extra}`}`;
+}
+
+function pageOrigin(): string {
+  return typeof location !== "undefined" ? location.origin : "http://localhost";
+}
+
+/**
+ * Preview iframes must share the hub's origin. PUBLIC_URL may be `localhost` while the
+ * page is opened on `127.0.0.1` (or the reverse); postMessage then never arrives.
+ */
+export function sameOriginOverlayUrl(absoluteUrl: string, origin: string = pageOrigin()): string {
+  try {
+    const u = new URL(absoluteUrl);
+    return `${origin}${u.pathname}${u.search}${u.hash}`;
+  } catch {
+    return absoluteUrl;
+  }
+}
+
+/** Target origin for postMessage into an overlay iframe src. */
+export function overlayMessageOrigin(iframeSrc: string, fallback: string = pageOrigin()): string {
+  try {
+    return new URL(iframeSrc, fallback).origin;
+  } catch {
+    return fallback;
+  }
 }
 
 function readBgOpacity(saved: Partial<ChatOverlaySettings> & { transparent?: boolean }): number {
@@ -268,6 +364,7 @@ export function loadChatSettings(): ChatOverlaySettings {
     const googleFontLink = typeof saved.googleFontLink === "string" ? saved.googleFontLink.slice(0, 500) : "";
     return {
       preview: saved.preview === "live" ? "live" : "fake",
+      layout: parseLayout(saved.layout ?? null),
       font: font === "custom" && !googleFontFamily ? DEFAULT_CHAT_SETTINGS.font : font,
       googleFontLink,
       googleFontFamily,
@@ -275,7 +372,12 @@ export function loadChatSettings(): ChatOverlaySettings {
       fontWeight: clampFontWeight(Number(saved.fontWeight)),
       fadeOutMs: clampFadeOutMs(Number(saved.fadeOutMs)),
       fadeIn: parseFadeIn(saved.fadeIn ?? null),
+      bgColor: sanitizeBgColor(saved.bgColor),
       bgOpacity: readBgOpacity(saved),
+      showPfp: saved.showPfp !== false,
+      messageGap: clampMessageGap(
+        saved.messageGap == null ? DEFAULT_CHAT_SETTINGS.messageGap : Number(saved.messageGap),
+      ),
       maxMessages: clampMaxMessages(Number(saved.maxMessages)),
     };
   } catch {
