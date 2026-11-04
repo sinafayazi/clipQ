@@ -11,6 +11,7 @@ import {
   DEFAULT_STREAK_SETTINGS,
   FADE_IN_OPTIONS,
   FONT_OPTIONS,
+  LAYOUT_OPTIONS,
   STREAK_SETTINGS_MESSAGE,
   chatLiveAppearance,
   chatObsQuery,
@@ -20,11 +21,15 @@ import {
   clampFontSize,
   clampFontWeight,
   clampMaxMessages,
+  clampMessageGap,
   ensureGoogleFontStylesheet,
   fontStack,
   loadChatSettings,
   loadStreakSettings,
+  overlayMessageOrigin,
   parseGoogleFontsInput,
+  sameOriginOverlayUrl,
+  sanitizeBgColor,
   saveChatSettings,
   saveStreakSettings,
   streakLiveAppearance,
@@ -33,6 +38,7 @@ import {
   withOverlayQuery,
   type ChatFadeIn,
   type ChatFont,
+  type ChatLayout,
   type ChatOverlaySettings,
   type ChatPreviewSource,
   type StreakOverlaySettings,
@@ -111,9 +117,12 @@ function OverlaysHub() {
     () => (info ? withOverlayQuery(info.chatUrl, chatObsQuery(chat)) : ""),
     [info, chat],
   );
-  /** Remount only when switching fake ↔ live (or auth URL changes). */
+  /** Remount only when switching fake ↔ live (or auth URL changes). Same-origin for postMessage. */
   const chatPreviewUrl = useMemo(
-    () => (info ? withOverlayQuery(info.chatUrl, chatPreviewShellQuery(chat.preview)) : ""),
+    () =>
+      info
+        ? sameOriginOverlayUrl(withOverlayQuery(info.chatUrl, chatPreviewShellQuery(chat.preview)))
+        : "",
     [info, chat.preview],
   );
   const streakObsUrl = useMemo(
@@ -121,31 +130,36 @@ function OverlaysHub() {
     [info, streak],
   );
   const streakPreviewUrl = useMemo(
-    () => (info ? withOverlayQuery(info.streakUrl, streakPreviewShellQuery(streak.preview)) : ""),
+    () =>
+      info
+        ? sameOriginOverlayUrl(withOverlayQuery(info.streakUrl, streakPreviewShellQuery(streak.preview)))
+        : "",
     [info, streak.preview],
   );
 
   const pushChatAppearance = (settings: ChatOverlaySettings = chat) => {
+    if (!chatPreviewUrl) return;
     chatFrameRef.current?.contentWindow?.postMessage(
       { type: CHAT_SETTINGS_MESSAGE, settings: chatLiveAppearance(settings) },
-      location.origin,
+      overlayMessageOrigin(chatPreviewUrl),
     );
   };
 
   const pushStreakAppearance = (settings: StreakOverlaySettings = streak) => {
+    if (!streakPreviewUrl) return;
     streakFrameRef.current?.contentWindow?.postMessage(
       { type: STREAK_SETTINGS_MESSAGE, settings: streakLiveAppearance(settings) },
-      location.origin,
+      overlayMessageOrigin(streakPreviewUrl),
     );
   };
 
   useEffect(() => {
     pushChatAppearance(chat);
-  }, [chat]);
+  }, [chat, chatPreviewUrl]);
 
   useEffect(() => {
     pushStreakAppearance(streak);
-  }, [streak]);
+  }, [streak, streakPreviewUrl]);
 
   const patchChat = <K extends keyof ChatOverlaySettings>(key: K, value: ChatOverlaySettings[K]) =>
     setChat((prev) => ({ ...prev, [key]: value }));
@@ -286,6 +300,53 @@ function OverlaysHub() {
                   </p>
                 </fieldset>
 
+                <fieldset className="overlays-fieldset">
+                  <legend>Layout</legend>
+                  <div className="overlays-segment overlays-segment-wrap" role="group" aria-label="Chat layout">
+                    {LAYOUT_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className="overlays-segment-btn"
+                        aria-pressed={chat.layout === opt.id}
+                        onClick={() => patchChat("layout", opt.id as ChatLayout)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="overlays-field-hint">
+                    {LAYOUT_OPTIONS.find((opt) => opt.id === chat.layout)?.hint}
+                  </p>
+                </fieldset>
+
+                <fieldset className="overlays-fieldset">
+                  <legend>Profile pics</legend>
+                  <div className="overlays-segment" role="group" aria-label="Profile pictures">
+                    {(
+                      [
+                        [true, "On"],
+                        [false, "Off"],
+                      ] as const
+                    ).map(([on, label]) => (
+                      <button
+                        key={label}
+                        type="button"
+                        className="overlays-segment-btn"
+                        aria-pressed={chat.showPfp === on}
+                        onClick={() => patchChat("showPfp", on)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="overlays-field-hint">
+                    {chat.showPfp
+                      ? "Show chatter avatars from Kick (badge on most layouts, large disc on Portraits)."
+                      : "Hide profile pictures on every layout."}
+                  </p>
+                </fieldset>
+
                 <div className="field">
                   <label htmlFor="chat-font">Font</label>
                   <select
@@ -376,8 +437,32 @@ function OverlaysHub() {
                   </div>
 
                   <div className="field">
-                    <label htmlFor="chat-bg-opacity">Background</label>
-                    <div className="overlays-range">
+                    <label htmlFor="chat-bg-color">Background</label>
+                    <div className="overlays-color">
+                      <input
+                        id="chat-bg-color"
+                        type="color"
+                        value={sanitizeBgColor(chat.bgColor)}
+                        onChange={(e) => patchChat("bgColor", sanitizeBgColor(e.target.value))}
+                        aria-label="Background color"
+                      />
+                      <input
+                        id="chat-bg-hex"
+                        type="text"
+                        spellCheck={false}
+                        autoComplete="off"
+                        maxLength={7}
+                        defaultValue={sanitizeBgColor(chat.bgColor)}
+                        key={sanitizeBgColor(chat.bgColor)}
+                        onBlur={(e) => patchChat("bgColor", sanitizeBgColor(e.target.value))}
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter") return;
+                          e.currentTarget.blur();
+                        }}
+                        aria-label="Background hex color"
+                      />
+                    </div>
+                    <div className="overlays-range" style={{ marginTop: 10 }}>
                       <input
                         id="chat-bg-opacity"
                         type="range"
@@ -386,12 +471,16 @@ function OverlaysHub() {
                         step={1}
                         value={chat.bgOpacity}
                         onChange={(e) => patchChat("bgOpacity", clampBgOpacity(Number(e.target.value)))}
+                        aria-label="Background opacity"
                       />
                       <output htmlFor="chat-bg-opacity" aria-live="polite">
                         {chat.bgOpacity}%
                       </output>
                     </div>
-                    <p className="overlays-field-hint">0% is fully transparent for OBS.</p>
+                    <p className="overlays-field-hint">
+                      Color tints the full panel and Cards / Portraits / Stripe plates. Opacity 0% keeps the panel clear
+                      for OBS.
+                    </p>
                   </div>
 
                   <div className="field">
@@ -430,16 +519,36 @@ function OverlaysHub() {
                   </div>
                 </fieldset>
 
-                <div className="field">
-                  <label htmlFor="chat-max">Max messages</label>
-                  <input
-                    id="chat-max"
-                    type="number"
-                    min={5}
-                    max={100}
-                    value={chat.maxMessages}
-                    onChange={(e) => patchChat("maxMessages", clampMaxMessages(Number(e.target.value)))}
-                  />
+                <div className="overlays-field-grid">
+                  <div className="field">
+                    <label htmlFor="chat-gap">Space between</label>
+                    <div className="overlays-range">
+                      <input
+                        id="chat-gap"
+                        type="range"
+                        min={0}
+                        max={48}
+                        step={1}
+                        value={chat.messageGap}
+                        onChange={(e) => patchChat("messageGap", clampMessageGap(Number(e.target.value)))}
+                      />
+                      <output htmlFor="chat-gap" aria-live="polite">
+                        {chat.messageGap}px
+                      </output>
+                    </div>
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="chat-max">Max messages</label>
+                    <input
+                      id="chat-max"
+                      type="number"
+                      min={5}
+                      max={100}
+                      value={chat.maxMessages}
+                      onChange={(e) => patchChat("maxMessages", clampMaxMessages(Number(e.target.value)))}
+                    />
+                  </div>
                 </div>
 
                 <div className="overlays-link-block">

@@ -341,6 +341,30 @@
   gap: 16px;
 }
 
+.overlays-hub .overlays-color {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.overlays-hub .overlays-color input[type="color"] {
+  width: 40px;
+  height: 40px;
+  min-height: 0;
+  padding: 2px;
+  border: 1px solid var(--raised);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: none; /* taste-skill-ignore — clear shared .field input inset */
+  cursor: pointer;
+}
+
+.overlays-hub .overlays-color input[type="text"] {
+  font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+  text-transform: lowercase;
+}
+
 .overlays-hub .overlays-range {
   display: grid;
   grid-template-columns: 1fr auto;
