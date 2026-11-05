@@ -6,6 +6,17 @@ interface V2Channel {
   user_id: number;
   user?: { username?: string };
   chatroom?: { id?: number };
+  subscriber_badges?: SubscriberBadgeRaw[];
+}
+
+export interface SubscriberBadgeRaw {
+  months?: number;
+  badge_image?: { src?: string };
+}
+
+export interface SubscriberBadge {
+  months: number;
+  src: string;
 }
 
 /**
@@ -21,4 +32,20 @@ export async function lookupChannel(slug: string): Promise<ChannelInfo> {
     displayName: c.user?.username ?? c.slug,
     chatroomId: c.chatroom?.id ?? null,
   };
+}
+
+/** Channel subscriber badges (streamer-uploaded). Empty if Kick/Cloudflare blocks the request. */
+export async function fetchSubscriberBadges(slug: string): Promise<SubscriberBadge[]> {
+  try {
+    const c = await getJson<V2Channel>(`https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`);
+    return (c.subscriber_badges || [])
+      .map((b) => ({
+        months: Number(b.months) || 0,
+        src: String(b?.badge_image?.src || ""),
+      }))
+      .filter((b) => b.src)
+      .sort((a, b) => b.months - a.months);
+  } catch {
+    return [];
+  }
 }

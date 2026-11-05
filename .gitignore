@@ -4,3 +4,5 @@ data/
 .env
 *.db
 *.db-*
+.agents
+.taste-skill

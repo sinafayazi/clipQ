@@ -1,0 +1,404 @@
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("../fonts/PlusJakartaSans-VariableFont_wght.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  ascent-override: 90%;
+  descent-override: 22%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: IRANSans;
+  src: url("../fonts/IRANSansXVF.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  size-adjust: 92%;
+  unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  color: white;
+  font-family: IRANSans, var(--msg-font, "Plus Jakarta Sans", sans-serif);
+  overflow: hidden;
+}
+
+#status {
+  position: fixed;
+  top: 12px;
+  bottom: 12px;
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.7;
+  color: red;
+  text-shadow: 0 1px 2px black;
+  transition: opacity 0.3s ease;
+}
+
+#status.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#chat {
+  --msg-font: "Plus Jakarta Sans", sans-serif;
+  --msg-size: 20px;
+  --msg-body-size: calc(var(--msg-size) * 0.9);
+  --msg-weight: 600;
+  --msg-user-weight: 800;
+  --badge-size: calc(var(--msg-size) * 1);
+  --emote-height: 1.4em;
+  --fade-out-ms: 600ms;
+  --bg-color: #000000;
+  --bg-opacity: 0;
+  --msg-gap: 8px;
+  --avatar-size: calc(var(--msg-size) * 2.15);
+  --plate: color-mix(in srgb, var(--bg-color) 72%, transparent);
+  --plate-pad-y: 0.42em;
+  --plate-pad-x: 0.7em;
+  --plate-radius: 0.55em;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--msg-gap);
+  padding-block: 7px;
+  padding-inline: 4px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background-color: color-mix(in srgb, var(--bg-color) calc(var(--bg-opacity) * 1%), transparent);
+  font-family: IRANSans, var(--msg-font);
+}
+
+#chat[data-transparent="1"] {
+  --badge-size: calc(var(--msg-size) * 1.15);
+  --emote-height: 1.5em;
+}
+
+#chat[data-layout="cards"],
+#chat[data-layout="portraits"],
+#chat[data-layout="stripe"] {
+  padding-inline: 8px;
+}
+
+@keyframes msg-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes msg-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.55em);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes msg-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.msg {
+  --user-color: #ffffff;
+  font-size: var(--msg-size);
+  line-height: 1.2;
+  text-shadow: 0 1px 2px black;
+  word-break: break-word;
+  opacity: 1;
+  transform-origin: left center;
+  transition: opacity var(--fade-out-ms) ease;
+}
+
+#chat[data-anim="fade"] .msg {
+  animation: msg-fade-in 0.22s ease-out;
+}
+
+#chat[data-anim="slide"] .msg {
+  animation: msg-slide-in 0.28s cubic-bezier(0.2, 0, 0, 1);
+}
+
+#chat[data-anim="pop"] .msg {
+  animation: msg-pop-in 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+#chat[data-anim="none"] .msg {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #chat .msg {
+    animation: none !important;
+  }
+}
+
+.msg.is-fading {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.msg .avatar {
+  display: none;
+}
+
+.msg .avatar-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.msg .msg-head {
+  display: inline;
+}
+
+.msg .badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 6px;
+  height: 1.2em;
+  vertical-align: middle;
+}
+
+.msg .badge-img {
+  width: var(--badge-size);
+  height: var(--badge-size);
+  display: block;
+  flex: 0 0 var(--badge-size);
+  object-fit: contain;
+  object-position: center;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6));
+}
+
+.msg .badge-img.is-pfp {
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+#chat[data-pfp="0"] .msg .badge-img.is-pfp {
+  display: none;
+}
+
+#chat[data-pfp="0"] .msg .avatar {
+  display: none !important;
+}
+
+#chat[data-layout="portraits"][data-pfp="0"] .msg {
+  grid-template-columns: minmax(0, 1fr);
+  padding-inline-start: 0.75em;
+}
+
+#chat[data-layout="portraits"][data-pfp="0"] .msg .msg-head,
+#chat[data-layout="portraits"][data-pfp="0"] .msg .body {
+  grid-column: 1;
+}
+
+.msg .user {
+  font-family: IRANSans, var(--msg-font);
+  font-weight: var(--msg-user-weight);
+  margin-right: 6px;
+  vertical-align: middle;
+  position: relative;
+  top: 1px;
+}
+
+.msg .body {
+  font-size: var(--msg-body-size);
+  unicode-bidi: plaintext;
+  font-weight: var(--msg-weight);
+  vertical-align: middle;
+  position: relative;
+  top: 1px;
+}
+
+.msg .mention {
+  font-weight: var(--msg-user-weight);
+}
+
+.msg .emote {
+  display: inline-block;
+  height: var(--emote-height);
+  width: auto;
+  vertical-align: middle;
+  margin: 0 1px;
+}
+
+.msg .emote-stack {
+  position: relative;
+  display: inline-block;
+  height: var(--emote-height);
+  vertical-align: middle;
+  margin: 0 1px;
+}
+
+.msg .emote-stack .emote {
+  margin: 0;
+}
+
+.msg .emote-stack .emote.is-zero-width {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* —— Cards: each line on its own dark plate —— */
+#chat[data-layout="cards"] .msg {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: var(--plate-pad-y) var(--plate-pad-x);
+  border-radius: var(--plate-radius);
+  background: var(--plate);
+  text-shadow: none;
+}
+
+#chat[data-layout="cards"] .msg .badge-img {
+  filter: none;
+}
+
+/* —— Portraits: large avatar + stacked meta/body —— */
+#chat[data-layout="portraits"] .msg {
+  display: grid;
+  grid-template-columns: var(--avatar-size) minmax(0, 1fr);
+  column-gap: 0.55em;
+  row-gap: 0.12em;
+  align-items: start;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0.45em 0.75em 0.5em 0.45em;
+  border-radius: calc(var(--plate-radius) + 0.15em);
+  background: var(--plate);
+  text-shadow: none;
+}
+
+#chat[data-layout="portraits"] .msg .avatar {
+  display: grid;
+  place-items: center;
+  grid-row: 1 / span 2;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  margin-top: 0.1em;
+  overflow: hidden;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--user-color) 28%, #111);
+  color: #fff;
+  font-size: calc(var(--avatar-size) * 0.42);
+  font-weight: var(--msg-user-weight);
+  line-height: 1;
+  text-shadow: none;
+}
+
+#chat[data-layout="portraits"] .msg .avatar.is-letter {
+  border: 2px solid color-mix(in srgb, var(--user-color) 70%, #fff);
+}
+
+#chat[data-layout="portraits"] .msg .msg-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+  grid-column: 2;
+}
+
+#chat[data-layout="portraits"] .msg .badges {
+  margin-right: 0;
+}
+
+#chat[data-layout="portraits"] .msg .user {
+  margin-right: 0;
+  top: 0;
+}
+
+#chat[data-layout="portraits"] .msg .body {
+  display: block;
+  grid-column: 2;
+  top: 0;
+  line-height: 1.3;
+}
+
+#chat[data-layout="portraits"] .msg .badge-img {
+  filter: none;
+}
+
+/* Large avatar already shows the pic — hide the small badge duplicate. */
+#chat[data-layout="portraits"] .msg .badge-img.is-pfp {
+  display: none;
+}
+
+/* —— Stack: name row, then body —— */
+#chat[data-layout="stack"] .msg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15em;
+  width: fit-content;
+  max-width: 100%;
+}
+
+#chat[data-layout="stack"] .msg .msg-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+#chat[data-layout="stack"] .msg .badges {
+  margin-right: 0;
+}
+
+#chat[data-layout="stack"] .msg .user {
+  margin-right: 0;
+  top: 0;
+}
+
+#chat[data-layout="stack"] .msg .body {
+  display: block;
+  top: 0;
+  padding-inline-start: 0.1em;
+  line-height: 1.35;
+}
+
+/* —— Stripe: user-color edge + soft plate —— */
+#chat[data-layout="stripe"] .msg {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: var(--plate-pad-y) var(--plate-pad-x) var(--plate-pad-y) calc(var(--plate-pad-x) + 0.35em);
+  border-radius: 0 var(--plate-radius) var(--plate-radius) 0;
+  border-left: 0.28em solid var(--user-color);
+  background: var(--plate);
+  text-shadow: none;
+}
+
+#chat[data-layout="stripe"] .msg .badge-img {
+  filter: none;
+}
