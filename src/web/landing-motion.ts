@@ -1,5 +1,6 @@
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { setAsciiThumbPalette, paletteForProvider } from "./landing-ascii-thumb";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -219,7 +220,10 @@ function initHowFlow() {
       clipIndex++;
       if (title) title.textContent = clip.title;
       if (meta) meta.textContent = clip.meta;
-      if (screen) screen.className = `how-screen ${clip.thumb}`;
+      if (screen) {
+        screen.className = `how-screen ${clip.thumb}`;
+        setAsciiThumbPalette(screen, paletteForProvider(clip.thumb));
+      }
     });
 
     tl.fromTo(
@@ -379,3 +383,15 @@ function initCommandsTerminal() {
 }
 
 start();
+
+function syncHeaderScroll() {
+  const header = document.querySelector(".site-header");
+  if (!header) return;
+  const onScroll = () => {
+    header.classList.toggle("is-scrolled", window.scrollY > 8);
+  };
+  onScroll();
+  window.addEventListener("scroll", onScroll, { passive: true });
+}
+
+syncHeaderScroll();
