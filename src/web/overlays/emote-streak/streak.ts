@@ -332,7 +332,7 @@ async function start() {
     return;
   }
   try {
-    const meta = await fetchOverlayMeta();
+    const meta = await fetchOverlayMeta("streak");
     sevenTv = await loadSevenTv(meta.kickUserId);
     connectChatroom(meta, onChatMessage, setStatus);
   } catch (err) {

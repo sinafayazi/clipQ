@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { anyOverlayKeyValid, overlayKey, overlayKeyValid, overlayUrl } from "../src/server/overlays/keys.js";
+import { overlayKey, overlayKeyValid, overlayUrl } from "../src/server/overlays/keys.js";
 
 describe("overlay keys", () => {
   it("signs distinct keys for chat and streak", () => {
@@ -15,8 +15,7 @@ describe("overlay keys", () => {
     expect(overlayKeyValid("chat", 7, key)).toBe(true);
     expect(overlayKeyValid("streak", 7, key)).toBe(false);
     expect(overlayKeyValid("chat", 8, key)).toBe(false);
-    expect(anyOverlayKeyValid(7, key)).toBe(true);
-    expect(anyOverlayKeyValid(7, overlayKey("streak", 7))).toBe(true);
+    expect(overlayKeyValid("streak", 7, overlayKey("streak", 7))).toBe(true);
   });
 
   it("builds public overlay URLs", () => {

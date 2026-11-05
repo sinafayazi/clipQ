@@ -6,3 +6,4 @@ data/
 *.db-*
 .agents
 .taste-skill
+skills-lock.json

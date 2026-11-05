@@ -34,8 +34,25 @@ export async function lookupChannel(slug: string): Promise<ChannelInfo> {
   };
 }
 
-/** Channel subscriber badges (streamer-uploaded). Empty if Kick/Cloudflare blocks the request. */
+/** Badges change rarely: kept for an hour. An empty answer (Kick refused) is kept 5 minutes, then retried. */
+const BADGES_TTL_MS = 60 * 60 * 1000;
+const BADGES_EMPTY_TTL_MS = 5 * 60 * 1000;
+const badgeCache = new Map<string, { badges: SubscriberBadge[]; until: number }>();
+
+/**
+ * Channel subscriber badges (streamer-uploaded). Empty if Kick/Cloudflare blocks the request. Cached,
+ * as every overlay load (each OBS scene switch or refresh) asks for them.
+ */
 export async function fetchSubscriberBadges(slug: string): Promise<SubscriberBadge[]> {
+  const key = slug.toLowerCase();
+  const hit = badgeCache.get(key);
+  if (hit && hit.until > Date.now()) return hit.badges;
+  const badges = await lookupSubscriberBadges(slug);
+  badgeCache.set(key, { badges, until: Date.now() + (badges.length ? BADGES_TTL_MS : BADGES_EMPTY_TTL_MS) });
+  return badges;
+}
+
+async function lookupSubscriberBadges(slug: string): Promise<SubscriberBadge[]> {
   try {
     const c = await getJson<V2Channel>(`https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`);
     return (c.subscriber_badges || [])

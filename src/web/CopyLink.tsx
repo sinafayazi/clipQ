@@ -1,7 +1,7 @@
 import { useState } from "react";
 
-/** A read-only link with a Copy button. */
-export function CopyLink({ url }: { url: string }) {
+/** A read-only link with a Copy button. `onCopy` runs once it's on the clipboard. */
+export function CopyLink({ url, onCopy }: { url: string; onCopy?: () => void }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="copy-link">
@@ -12,6 +12,7 @@ export function CopyLink({ url }: { url: string }) {
         onClick={() =>
           navigator.clipboard.writeText(url).then(
             () => {
+              onCopy?.();
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             },

@@ -21,11 +21,6 @@ export function overlayKeyValid(kind: OverlayKind, channelId: number, key: strin
   return got.length === want.length && timingSafeEqual(got, want);
 }
 
-/** True when `key` matches chat or streak for this channel (meta is shared by both overlays). */
-export function anyOverlayKeyValid(channelId: number, key: string): boolean {
-  return overlayKeyValid("chat", channelId, key) || overlayKeyValid("streak", channelId, key);
-}
-
 export function overlayUrl(kind: OverlayKind, channelId: number): string {
   return `${config.publicUrl}/overlays/${PATH[kind]}/?c=${channelId}&k=${overlayKey(kind, channelId)}`;
 }

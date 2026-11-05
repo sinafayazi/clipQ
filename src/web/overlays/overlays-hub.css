@@ -693,3 +693,10 @@
     min-height: 22rem;
   }
 }
+
+.overlays-hub .overlays-link-stale {
+  margin: 0;
+  color: var(--negative);
+  font-size: var(--fs-small);
+  line-height: 18px;
+}
