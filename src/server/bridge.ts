@@ -4,7 +4,7 @@ import { findClips } from "./clips/parse.js";
 import type { KickBot } from "./kick/bot.js";
 import type { ChatMessage, KickChat } from "./kick/chat.js";
 import { MAX_TIMEOUT_MS, type QueueService } from "./queue/service.js";
-import { songCommands } from "./songs/commands.js";
+import { adjust, songCommands, votesText } from "./songs/commands.js";
 
 /** Most links taken from one message; the per-user limit usually cuts it lower. */
 const MAX_LINKS_PER_MESSAGE = 5;
@@ -20,7 +20,8 @@ export function commandsText(voteSkip: number): string {
   return (
     `clipQ: post a clip link to queue it. ${vote} ` +
     `Songs: !sr <link or name>, !song, !mysong, !wrongsong, !songs, !vs (vote skip). ` +
-    `Mods: !cq open/close/play/pause/next/skip/prev/clear, !cq ban/unban <user>, !cq timeout <user> [10m], !sr open/close/play/pause/skip/clear, !sr remove <user>, !volume <0-100>.`
+    `Mods: !cq open/close/play/pause/next/skip/prev/clear, !cq ban/unban <user>, !cq timeout <user> [10m], !cq votes <n>, ` +
+    `!sr open/close/play/pause/skip/clear, !sr remove <user>, !sr votes <n>, !volume <0-100>.`
   ).replace(/\s+/g, " ");
 }
 
@@ -121,7 +122,7 @@ export function bridgeChat(
   /**
    * Anyone: `!cvs`, `!cq commands` (or `!cq help`).
    * Broadcaster and moderators: `!cq open|close|play|pause|next|skip|prev|clear`, `!cq ban <user>`,
-   * `!cq timeout <user> [10m]`, `!cq unban <user>`.
+   * `!cq timeout <user> [10m]`, `!cq unban <user>`, `!cq volume <0-100|+n|-n>` (same as `!volume`), `!cq votes <n>` (0 = vote skip off).
    */
   function runCommand(channelId: number, msg: ChatMessage, text: string) {
     const [cmd, arg, target, duration] = text.toLowerCase().split(/\s+/);
@@ -176,6 +177,21 @@ export function bridgeChat(
       case "clear":
         queues.clear(channelId);
         break;
+      case "volume":
+      case "vol": {
+        const s = queues.settings(channelId);
+        const next = adjust(s.volume, target, 100);
+        if (next !== null) queues.updateSettings(channelId, { volume: next });
+        void bot.say(channelId, next === null ? `Volume is ${s.volume}%.` : `Volume set to ${next}%.`, msg.id);
+        break;
+      }
+      case "votes": {
+        const s = queues.settings(channelId);
+        const next = adjust(s.voteSkip, target, 1000);
+        if (next !== null) queues.updateSettings(channelId, { voteSkip: next });
+        void bot.say(channelId, votesText("clip", next ?? s.voteSkip, next !== null), msg.id);
+        break;
+      }
     }
   }
 }

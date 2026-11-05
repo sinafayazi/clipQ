@@ -187,6 +187,28 @@ function isCustomPfp(url: string) {
   return true;
 }
 
+// Every new chatter means a request to Kick, straight from OBS. A busy chat would fire dozens at
+// once and Kick starts refusing (429), so they go out two at a time, everything waits a minute after
+// a refusal, and a refused lookup isn't remembered: that chatter gets another try on a later message.
+const PFP_PARALLEL = 2;
+const PFP_BACKOFF_MS = 60_000;
+let pfpActive = 0;
+let pfpPausedUntil = 0;
+const pfpWaiting: (() => void)[] = [];
+
+async function pfpSlot<T>(run: () => Promise<T>): Promise<T> {
+  if (pfpActive >= PFP_PARALLEL) await new Promise<void>((go) => pfpWaiting.push(go));
+  pfpActive++;
+  try {
+    const wait = pfpPausedUntil - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    return await run();
+  } finally {
+    pfpActive--;
+    pfpWaiting.shift()?.();
+  }
+}
+
 async function resolvePfp(slug: string): Promise<string> {
   const key = String(slug || "")
     .trim()
@@ -195,19 +217,25 @@ async function resolvePfp(slug: string): Promise<string> {
   const cached = pfpCache.get(key);
   if (cached) return cached;
 
-  const pending = (async () => {
+  const pending = pfpSlot(async () => {
     try {
       const res = await fetch(`https://kick.com/api/v2/channels/${encodeURIComponent(key)}`, {
         headers: { accept: "application/json" },
       });
+      if (res.status === 429) {
+        pfpPausedUntil = Date.now() + PFP_BACKOFF_MS;
+        pfpCache.delete(key);
+        return "";
+      }
       if (!res.ok) return "";
       const data = await res.json();
       const pic = String(data?.user?.profile_pic || "");
       return isCustomPfp(pic) ? pic : "";
     } catch {
+      pfpCache.delete(key); // network trouble: try again later
       return "";
     }
-  })();
+  });
 
   pfpCache.set(key, pending);
   return pending;
@@ -623,7 +651,7 @@ async function start() {
     return;
   }
   try {
-    const meta = await fetchOverlayMeta();
+    const meta = await fetchOverlayMeta("chat");
     subBadges = Array.isArray(meta.subscriberBadges) ? meta.subscriberBadges : [];
     if (!subBadges.length && meta.slug) {
       subBadges = await loadSubBadgesFromKick(meta.slug);

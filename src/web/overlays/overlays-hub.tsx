@@ -553,7 +553,7 @@ function OverlaysHub() {
 
                 <div className="overlays-link-block">
                   <p className="overlays-link-label">OBS link</p>
-                  <CopyLink url={chatObsUrl} />
+                  <ObsLink url={chatObsUrl} storageKey="clipq-overlay-copied-chat" />
                   <button
                     type="button"
                     className="overlays-reset"
@@ -635,7 +635,7 @@ function OverlaysHub() {
 
                 <div className="overlays-link-block">
                   <p className="overlays-link-label">OBS link</p>
-                  <CopyLink url={streakObsUrl} />
+                  <ObsLink url={streakObsUrl} storageKey="clipq-overlay-copied-streak" />
                   <button
                     type="button"
                     className="overlays-reset"
@@ -717,3 +717,33 @@ function OverlaysHub() {
 }
 
 createRoot(document.getElementById("root")!).render(<OverlaysHub />);
+
+/**
+ * The OBS link carries the look, so a change made after copying it doesn't reach OBS until the new link
+ * is pasted there. Remembers the last copied link (in this browser) and says so when it's out of date.
+ */
+function ObsLink({ url, storageKey }: { url: string; storageKey: string }) {
+  const [copied, setCopied] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(storageKey);
+    } catch {
+      return null;
+    }
+  });
+  const remember = () => {
+    setCopied(url);
+    try {
+      localStorage.setItem(storageKey, url);
+    } catch {}
+  };
+  return (
+    <>
+      <CopyLink url={url} onCopy={remember} />
+      {copied !== null && copied !== url && (
+        <p className="overlays-link-stale" role="status">
+          You changed the look since you copied this link. Copy it again and paste it into the OBS browser source.
+        </p>
+      )}
+    </>
+  );
+}

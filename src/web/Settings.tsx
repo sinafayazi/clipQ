@@ -127,8 +127,9 @@ export function SettingsDialog({
           <section className="settings-section" aria-labelledby="vote-title">
             <h3 id="vote-title">Vote skip</h3>
             <p className="settings-hint">
-              Viewers type <code>!cvs</code> to vote to skip the playing clip; each viewer gets one vote per clip. 0 turns vote skip off.{" "}
-              <code>!cq commands</code> lists every command in chat.
+              Viewers type <code>!cvs</code> to vote to skip the playing clip; each viewer gets one vote per clip. 0 turns vote skip off.
+              Mods can set it in chat with <code>!cq votes 10</code> (<code>!sr votes 10</code> for songs). <code>!cq commands</code> lists
+              every command in chat.
             </p>
             <VoteSkipForm key={settings.voteSkip} value={settings.voteSkip} run={run} />
           </section>
@@ -136,6 +137,24 @@ export function SettingsDialog({
       )}
 
       {kind === "songs" && <SongSettingsSection state={state} run={run} />}
+
+      <section className="settings-section" aria-labelledby="sound-title">
+        <h3 id="sound-title">Sound</h3>
+        <p className="settings-hint">
+          One volume for clips and songs: the slider under either player, or <code>!volume 40</code> from a mod. Your own level is the
+          volume inside the player; clipQ multiplies on top. TikTok, X and Streamable keep their own volume.
+        </p>
+        <label className="switch settings-switch">
+          <input
+            type="checkbox"
+            role="switch"
+            checked={settings.normalize}
+            onChange={(e) => run(api.settings({ normalize: e.target.checked }))}
+          />
+          <span className="switch-ui" />
+          Even out loudness (Kick, Twitch and Instagram clips: loud ones down, quiet ones up; YouTube: YouTube turns loud ones down, clipQ turns quiet ones up)
+        </label>
+      </section>
 
       {isOwner && <AccessSection editors={state.editors} run={run} />}
 
@@ -196,8 +215,8 @@ function SongSettingsSection({ state, run }: { state: QueueState; run: Run }) {
     <section className="settings-section" aria-labelledby="songs-title">
       <h3 id="songs-title">Song requests</h3>
       <p className="settings-hint">
-        Viewers type <code>!sr</code> with a YouTube or Spotify link, or just the song's name. Spotify songs play from YouTube. Mods can
-        change the volume in chat with <code>!volume 40</code>. Viewers can see and change their songs on your{" "}
+        Viewers type <code>!sr</code> with a YouTube or Spotify link, or just the song's name. Spotify songs play from YouTube. Viewers can
+        see and change their songs on your{" "}
         <a href={`/s/${state.channel.slug}`} target="_blank" rel="noreferrer">
           song page
         </a>
@@ -221,12 +240,6 @@ function SongSettingsSection({ state, run }: { state: QueueState; run: Run }) {
           <CopyLink url={state.songs.obsUrl} />
         </>
       )}
-
-      <label className="switch settings-switch">
-        <input type="checkbox" role="switch" checked={s.normalize} onChange={(e) => save({ normalize: e.target.checked })} />
-        <span className="switch-ui" />
-        Even out loudness (loud songs down, quiet songs up)
-      </label>
 
       <div className="number-grid">
         <NumberField
@@ -262,7 +275,6 @@ function SongSettingsSection({ state, run }: { state: QueueState; run: Run }) {
           max={1000}
           onSave={(n) => save({ voteSkip: n })}
         />
-        <NumberField id="song-volume" label="Volume (0–100)" value={s.volume} min={0} max={100} onSave={(n) => save({ volume: n })} />
       </div>
 
       <div className="chips" role="group" aria-label="Who can request songs">
@@ -345,7 +357,14 @@ function AccessSection({ editors, run }: { editors: string[]; run: Run }) {
       >
         <div className="field">
           <label htmlFor="editor-name">Kick username</label>
-          <input id="editor-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="username" autoComplete="off" spellCheck={false} />
+          <input
+            id="editor-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="username"
+            autoComplete="off"
+            spellCheck={false}
+          />
         </div>
         <button className="btn" disabled={!name.trim()}>
           Add

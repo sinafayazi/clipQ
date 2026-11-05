@@ -32,7 +32,7 @@ const SEARCH_CANDIDATES = 6;
 
 // YouTube's watch page needs a browser-like agent to include the player data. (Kick is the one that
 // rejects fake agents; YouTube doesn't.)
-const BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
+export const BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
 
 const INNERTUBE_CONTEXT = { client: { clientName: "WEB", clientVersion: "2.20250101.00.00", hl: "en" } };
 
@@ -168,7 +168,7 @@ async function videoDetails(id: string): Promise<{ title: string; author: string
  * that has the loudness without a key, and it's a second source for the length when the player
  * endpoint refuses a server (it often refuses Render's). Best effort: a consent or bot page gives nulls.
  */
-async function videoPage(id: string): Promise<{ loudness: number | null; duration: number | null }> {
+export async function videoPage(id: string): Promise<{ loudness: number | null; duration: number | null }> {
   try {
     const res = await fetch(`https://www.youtube.com/watch?v=${id}&hl=en`, {
       headers: { "user-agent": BROWSER_UA, "accept-language": "en" },

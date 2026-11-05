@@ -12,7 +12,7 @@ import { authorizeUrl, createPkce, exchangeCode, fetchMe, fetchUser, VIEWER_SCOP
 import { MAX_TIMEOUT_MS, settingsSchema, songSettingsSchema, type QueueService, type RejectReason } from "./queue/service.js";
 import type { Session, Sessions, ViewerSessions } from "./sessions.js";
 import { rejectText } from "./songs/commands.js";
-import { anyOverlayKeyValid, overlayUrl } from "./overlays/keys.js";
+import { overlayKeyValid, overlayUrl } from "./overlays/keys.js";
 import { obsKeyValid } from "./songs/obs.js";
 import { parseSongQuery } from "./songs/resolve.js";
 
@@ -373,12 +373,12 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
     };
   });
 
-  const overlayQuery = z.object({ c: z.coerce.number().int(), k: z.string().max(64) });
+  const overlayQuery = z.object({ c: z.coerce.number().int(), k: z.string().max(64), o: z.enum(["chat", "streak"]) });
   app.get("/api/overlays/meta", async (req, reply) => {
     const q = overlayQuery.safeParse(req.query);
     if (!q.success) return reply.code(401).send({ error: "This overlay link is wrong or old. Copy it again from clipQ." });
     const ch = queues.channel(q.data.c);
-    if (!ch || !anyOverlayKeyValid(q.data.c, q.data.k)) {
+    if (!ch || !overlayKeyValid(q.data.o, q.data.c, q.data.k)) {
       return reply.code(401).send({ error: "This overlay link is wrong or old. Copy it again from clipQ." });
     }
     if (!ch.chatroomId) {
@@ -409,8 +409,8 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
     const songs = s.settings.songs;
     return {
       player: songs.player,
-      volume: songs.volume,
-      normalize: songs.normalize,
+      volume: s.settings.volume,
+      normalize: s.settings.normalize,
       clipPlaying: s.playing.clips,
       control: s.control,
       current: s.songs.current,

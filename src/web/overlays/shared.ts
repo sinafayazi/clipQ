@@ -26,8 +26,9 @@ export function overlayAuthQuery(): string {
   return `c=${encodeURIComponent(params.get("c") ?? "")}&k=${encodeURIComponent(params.get("k") ?? "")}`;
 }
 
-export async function fetchOverlayMeta(): Promise<OverlayMeta> {
-  const res = await fetch(`/api/overlays/meta?${overlayAuthQuery()}`);
+/** `kind`: which overlay this page is; its link's key opens only that one. */
+export async function fetchOverlayMeta(kind: "chat" | "streak"): Promise<OverlayMeta> {
+  const res = await fetch(`/api/overlays/meta?${overlayAuthQuery()}&o=${kind}`);
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(typeof body.error === "string" ? body.error : "Can't load overlay.");
   return body as OverlayMeta;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { songVolume, type PlayerControl, type QueueItem } from "../shared/types";
+import type { PlayerControl, QueueItem } from "../shared/types";
 import { Player, useAutoplay, usePlayingReport } from "./Player";
 import "./obs.css";
 
@@ -75,7 +75,7 @@ function ObsPlayer() {
   if (!current) return null;
   return (
     <div className="player obs-player">
-      <Player key={current.id} item={current} onEnded={onEnded} volume={songVolume(state?.volume ?? 60, current.loudness, state?.normalize ?? true)}
+      <Player key={current.id} item={current} onEnded={onEnded} volume={state?.volume ?? 60} normalize={state?.normalize ?? true}
         onPlaying={report}
         blocked={state?.clipPlaying}
         autoplay={start.autoplay}

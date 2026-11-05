@@ -22,7 +22,7 @@ import {
   SongNoteIcon,
   UpIcon,
 } from "./icons";
-import { Player, useAutoplay, usePlayingReport } from "./Player";
+import { Player, useAutoplay, usePlayerControl, usePlayingReport } from "./Player";
 import { useDragReorder } from "./reorder";
 import { CopyLink } from "./CopyLink";
 import { BanDialog, SettingsDialog } from "./Settings";
@@ -37,10 +37,10 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
   const me = useMe(state.editors);
   // Only one of clip and song plays at a time: a clip that comes up while a song plays loads paused
   // (it never starts by itself later), and its play button does nothing until the song is paused.
-  const clipStart = useAutoplay(current?.id ?? null, state.playing.songs);
-  const reportClip = usePlayingReport(current?.id ?? null, (id, playing) => api.playing("clips", id, playing), clipStart.track);
-  const clipControl = state.control?.kind === "clips" ? state.control : null;
   const [tab, setTabState] = useState<QueueKind>(() => (readTab() === "songs" ? "songs" : "clips"));
+  const clipStart = useAutoplay(current?.id ?? null, state.playing.songs, tab === "clips");
+  const reportClip = usePlayingReport(current?.id ?? null, (id, playing) => api.playing("clips", id, playing), clipStart.track);
+  const clipControl = usePlayerControl(state.control?.kind === "clips" ? state.control : null, tab !== "clips");
   const setTab = (t: QueueKind) => {
     setTabState(t);
     try {
@@ -104,9 +104,11 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
           <div className="tabs" role="tablist" aria-label="Lists">
             <button type="button" role="tab" id="tab-clips" aria-selected={tab === "clips"} aria-controls="panel-clips" onClick={() => setTab("clips")}>
               Clips <span className="tab-count">{queue.length}</span>
+              {state.playing.clips && <PlayingMark />}
             </button>
             <button type="button" role="tab" id="tab-songs" aria-selected={tab === "songs"} aria-controls="panel-songs" onClick={() => setTab("songs")}>
               Songs <span className="tab-count">{state.songs.queue.length}</span>
+              {state.playing.songs && <PlayingMark />}
             </button>
           </div>
         </div>
@@ -145,6 +147,7 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
         <div id="panel-songs" role="tabpanel" aria-labelledby="tab-songs" className="stage" hidden={tab !== "songs"}>
           <SongsView
             state={state}
+            visible={tab === "songs"}
             run={run}
             onBan={setBanTarget}
             onClear={() => askClear("songs")}
@@ -160,10 +163,13 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
                   key={current.id}
                   item={current}
                   onEnded={onEnded}
+                  volume={settings.volume}
+                  normalize={settings.normalize}
                   onPlaying={reportClip}
                   blocked={state.playing.songs}
                   autoplay={clipStart.autoplay}
                   control={clipControl}
+                  hidden={tab !== "clips"}
                 />
               ) : (
                 <div className="empty">
@@ -214,6 +220,7 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
                   Next
                 </button>
               </div>
+              <VolumeSlider value={settings.volume} onChange={(volume) => run(api.settings({ volume }))} />
             </div>
           </section>
 
@@ -389,12 +396,14 @@ function QueueTools({
 /** The song request list: its own player (or a pointer to the OBS page), controls and queue. */
 function SongsView({
   state,
+  visible,
   run,
   onBan,
   onClear,
   onSettings,
 }: {
   state: QueueState;
+  visible: boolean;
   run: (p: Promise<unknown>) => void;
   onBan: (username: string) => void;
   onClear: () => void;
@@ -403,7 +412,8 @@ function SongsView({
   const { current, queue, history, skipVotes, obsUrl } = state.songs;
   const s = state.settings.songs;
   const songPage = `/s/${state.channel.slug}`;
-  const songStart = useAutoplay(current?.id ?? null, state.playing.clips);
+  const songStart = useAutoplay(current?.id ?? null, state.playing.clips, visible);
+  const songControl = usePlayerControl(state.control?.kind === "songs" ? state.control : null, !visible);
   const reportSong = usePlayingReport(current?.id ?? null, (id, playing) => api.playing("songs", id, playing), songStart.track);
 
   // Songs always move on by themselves. `ifCurrent` stops a double skip if the OBS page also reports the end.
@@ -432,11 +442,13 @@ function SongsView({
               key={current.id}
               item={current}
               onEnded={onEnded}
-              volume={songVolume(s.volume, current.loudness, s.normalize)}
+              volume={state.settings.volume}
+              normalize={state.settings.normalize}
               onPlaying={reportSong}
               blocked={state.playing.clips}
               autoplay={songStart.autoplay}
-              control={state.control?.kind === "songs" ? state.control : null}
+              control={songControl}
+              hidden={!visible}
             />
           ) : (
             <div className="empty">
@@ -464,9 +476,7 @@ function SongsView({
                 {current.requestedBy.username}
                 {current.duration != null ? ` · ${formatDuration(current.duration)}` : ""}
                 {s.voteSkip > 0 && skipVotes > 0 ? ` · Skip votes ${skipVotes}/${s.voteSkip}` : ""}
-                {songVolume(s.volume, current.loudness, s.normalize) !== s.volume
-                  ? ` · ${(current.loudness ?? 0) > 0 ? "Loud" : "Quiet"} song, played at ${songVolume(s.volume, current.loudness, s.normalize)}%`
-                  : ""}
+                {songVolume(state.settings.volume, current.loudness, state.settings.normalize) !== state.settings.volume ? " · Quiet song, turned up" : ""}
               </p>
             </div>
             <BanRequester username={current.requestedBy.username} onBan={onBan} />
@@ -492,7 +502,7 @@ function SongsView({
               Next
             </button>
           </div>
-          <VolumeSlider value={s.volume} onChange={(volume) => run(api.settings({ songs: { volume } }))} />
+          <VolumeSlider value={state.settings.volume} onChange={(volume) => run(api.settings({ volume }))} />
         </div>
       </section>
 
@@ -532,6 +542,15 @@ function SongsView({
   );
 }
 
+/** On a tab whose player is playing, so sound never comes from a tab you can't place. */
+function PlayingMark() {
+  return (
+    <span className="tab-playing" title="Playing" aria-label="playing">
+      ▶
+    </span>
+  );
+}
+
 /** Ban or time out whoever requested what's playing, without hunting for them in the queue. */
 function BanRequester({ username, onBan }: { username: string; onBan: (username: string) => void }) {
   return (
@@ -542,7 +561,7 @@ function BanRequester({ username, onBan }: { username: string; onBan: (username:
   );
 }
 
-/** Song volume. Saves once you stop moving it; follows changes made elsewhere (a mod's !volume). */
+/** The one volume for clips and songs (the same slider on both tabs). Saves once you stop moving it; follows changes made elsewhere (a mod's !volume). */
 function VolumeSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const [v, setV] = useState(value);
   const timer = useRef<number | undefined>(undefined);
