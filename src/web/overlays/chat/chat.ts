@@ -10,8 +10,8 @@ import {
   fontStack,
   parseFadeIn,
   parseFont,
-  parseLayout,
   parseShowPfp,
+  resolveLayoutPair,
   sanitizeBgColor,
   sanitizeGoogleFontFamily,
   type ChatLiveAppearance,
@@ -20,6 +20,7 @@ import {
   connectChatroom,
   fetchOverlayMeta,
   loadSevenTv,
+  loadSevenTvUser,
   makeStatusController,
   type SevenTvEmote,
   type SubscriberBadge,
@@ -32,10 +33,12 @@ let messageTtlMs = clampFadeOutMs(Number(params.get("ttl") || 35_000));
 let showPfp = parseShowPfp(params.get("pfp"));
 const messageFadeMs = 600;
 const demoMode = ["1", "true", "yes", "on"].includes((params.get("demo") || "").toLowerCase());
+const hubPreview = ["1", "true", "yes", "on"].includes((params.get("preview") || "").toLowerCase());
 
 const status = document.querySelector("#status") as HTMLElement;
 const chat = document.querySelector("#chat") as HTMLElement;
 const setStatus = makeStatusController(status);
+if (hubPreview) chat.dataset.preview = "1";
 
 function parseBgOpacityParam(raw: string | null): number {
   if (raw == null || raw === "") return 90; // legacy links with no bg param used a solid panel
@@ -55,8 +58,13 @@ function applyLook(next: Partial<ChatLiveAppearance>) {
   const googleFamily =
     next.googleFontFamily != null ? sanitizeGoogleFontFamily(next.googleFontFamily) : undefined;
 
-  if (next.layout != null) {
-    chat.dataset.layout = parseLayout(next.layout);
+  if (next.layout != null || next.bgStyle != null) {
+    const pair = resolveLayoutPair(
+      next.layout != null ? String(next.layout) : chat.dataset.layout,
+      next.bgStyle != null ? String(next.bgStyle) : chat.dataset.bg,
+    );
+    chat.dataset.layout = pair.layout;
+    chat.dataset.bg = pair.bgStyle;
   }
   if (font != null || googleFamily != null) {
     const resolvedFont = font ?? parseFont(params.get("font"));
@@ -102,20 +110,24 @@ function applyLook(next: Partial<ChatLiveAppearance>) {
 }
 
 chat.style.setProperty("--fade-out-ms", `${messageFadeMs}ms`);
-applyLook({
-  layout: parseLayout(params.get("layout")),
-  font: parseFont(params.get("font")),
-  googleFontFamily: sanitizeGoogleFontFamily(params.get("ff")),
-  fontSize: clampFontSize(Number(params.get("size") || 20)),
-  fontWeight: clampFontWeight(Number(params.get("weight") || 600)),
-  fadeOutMs: messageTtlMs,
-  fadeIn: parseFadeIn(params.get("anim")),
-  bgColor: sanitizeBgColor(params.get("bgc")),
-  bgOpacity: parseBgOpacityParam(params.get("bg")),
-  showPfp,
-  messageGap: clampMessageGap(Number(params.get("gap") ?? 8)),
-  maxMessages,
-});
+{
+  const pair = resolveLayoutPair(params.get("layout"), params.get("bgstyle"));
+  applyLook({
+    layout: pair.layout,
+    bgStyle: pair.bgStyle,
+    font: parseFont(params.get("font")),
+    googleFontFamily: sanitizeGoogleFontFamily(params.get("ff")),
+    fontSize: clampFontSize(Number(params.get("size") || 20)),
+    fontWeight: clampFontWeight(Number(params.get("weight") || 600)),
+    fadeOutMs: messageTtlMs,
+    fadeIn: parseFadeIn(params.get("anim")),
+    bgColor: sanitizeBgColor(params.get("bgc")),
+    bgOpacity: parseBgOpacityParam(params.get("bg")),
+    showPfp,
+    messageGap: clampMessageGap(Number(params.get("gap") ?? 8)),
+    maxMessages,
+  });
+}
 
 const emoteRe = /\[emote:(\d+):([^\]]+)\]/g;
 const mentionRe = /@([A-Za-z0-9_]+)/g;
@@ -133,10 +145,6 @@ const localBadgeFile: Record<string, string> = {
   founder: "/icons/Founder.svg",
   kick_founder22: "/icons/Founder22.png",
 };
-/** Extra local badges for specific chatters. Keys are lowercase usernames. */
-const extraUserBadges = new Map<string, { src: string; alt: string }[]>([
-  ["kinkanexo", [{ src: "/icons/Foot.png", alt: "Foot" }]],
-]);
 const globalBadgeFile: Record<string, string> = {
   trainwreckstv: "trainwreckstv.svg",
   staff: "staff.svg",
@@ -426,19 +434,6 @@ function appendBadges(parent: HTMLElement, badges: any, badgesV2: any) {
   if (wrap.childNodes.length) parent.append(wrap);
 }
 
-function appendExtraUserBadges(row: HTMLElement, username: string) {
-  const extras = extraUserBadges.get(
-    String(username || "")
-      .trim()
-      .toLowerCase(),
-  );
-  if (!extras?.length) return;
-  const wrap = ensureBadgesWrap(row);
-  for (const badge of extras) {
-    appendBadgeImg(wrap, badge.src, badge.alt);
-  }
-}
-
 function makeEmoteImg(src: string, name: string, zeroWidth: boolean) {
   const img = document.createElement("img");
   img.className = zeroWidth ? "emote is-zero-width" : "emote";
@@ -577,7 +572,6 @@ function addMessage(payload: any) {
   appendContent(body, payload.content ?? "");
 
   row.append(head, body);
-  appendExtraUserBadges(row, username);
   chat.append(row);
   attachPfp(row, payload);
   scheduleMessageExpiry(row);
@@ -604,22 +598,34 @@ async function loadSubBadgesFromKick(slug: string): Promise<SubscriberBadge[]> {
   }
 }
 
+/** Fake-chat 7TV pack: https://7tv.app/users/01FE9DRF000009TR6M9N941CYW (xQc). */
+const DEMO_7TV_USER_ID = "01FE9DRF000009TR6M9N941CYW";
+
 const DEMO_LINES: { user: string; color: string; content: string; badges?: { type: string; text: string }[] }[] = [
-  { user: "mira", color: "#53FC18", content: "first!", badges: [{ type: "subscriber", text: "Subscriber" }] },
-  { user: "nox", color: "#FF9B3D", content: "clip that @mira", badges: [{ type: "vip", text: "VIP" }] },
-  { user: "kira", color: "#7DD3FC", content: "LUL that was clean" },
-  { user: "zane", color: "#F472B6", content: "ggs, queue next?", badges: [{ type: "moderator", text: "Moderator" }] },
-  { user: "opal", color: "#FBBF24", content: "anyone got the song name?" },
-  { user: "rex", color: "#38BDF8", content: "W stream" },
-  { user: "june", color: "#34D399", content: "@zane already in queue" },
-  { user: "ash", color: "#FB7185", content: "wait for the rematch" },
-  { user: "nima", color: "#FB923C", content: "این کلیپ رو بنداز @mira", badges: [{ type: "vip", text: "VIP" }] },
-  { user: "sara", color: "#A3E635", content: "خخخ عالی بود" },
-  { user: "kaveh", color: "#E879F9", content: "جی‌جی، بعدی تو صف؟", badges: [{ type: "moderator", text: "Moderator" }] },
-  { user: "negar", color: "#FACC15", content: "اسم آهنگو کسی داره؟" },
-  { user: "radin", color: "#22D3EE", content: "استریم ترکوند" },
-  { user: "hasti", color: "#2DD4BF", content: "@kaveh از قبل تو صفه" },
-  { user: "pouya", color: "#F43F5E", content: "ریمچ رو صبر کنید" },
+  { user: "xQc", color: "#53FC18", content: "first! [emote:37226:KEKW]", badges: [{ type: "subscriber", text: "Subscriber" }] },
+  { user: "AdinRoss", color: "#FF9B3D", content: "clip that @xQc peepoHappy", badges: [{ type: "vip", text: "VIP" }] },
+  { user: "Amouranth", color: "#7DD3FC", content: "[emote:37225:LULW] that was clean" },
+  { user: "TrainwrecksTV", color: "#F472B6", content: "ggs, queue next? [emote:39286:EZ]", badges: [{ type: "moderator", text: "Moderator" }] },
+  { user: "Asmongold", color: "#FBBF24", content: "anyone got the song name? AYAYA" },
+  { user: "Destiny", color: "#38BDF8", content: "W stream [emote:37230:OMEGALUL]" },
+  { user: "IcePoseidon", color: "#34D399", content: "@TrainwrecksTV already in queue Clap" },
+  { user: "Odablock", color: "#FB7185", content: "wait for the rematch [emote:1730852:catKiss]" },
+  { user: "Roshtein", color: "#FB923C", content: "clip that @Amouranth [emote:37226:KEKW] [emote:37226:KEKW]", badges: [{ type: "vip", text: "VIP" }] },
+  { user: "Clavicular", color: "#A3E635", content: "that was crazy GIGACHAD" },
+  { user: "N3on", color: "#E879F9", content: "ggs, who's next? NODDERS", badges: [{ type: "moderator", text: "Moderator" }] },
+  { user: "Buddha", color: "#FACC15", content: "what song is this? [emote:39286:EZ]" },
+  { user: "PaymoneyWubby", color: "#22D3EE", content: "W stream catJAM" },
+  { user: "Mizkif", color: "#2DD4BF", content: "@N3on already queued [emote:37225:LULW]" },
+  { user: "Lacy", color: "#F43F5E", content: "hold for the rematch PauseChamp" },
+  { user: "Amouranth", color: "#7DD3FC", content: "peepoHappy peepoHappy peepoHappy" },
+  { user: "xQc", color: "#53FC18", content: "[emote:37230:OMEGALUL] [emote:37230:OMEGALUL] [emote:37226:KEKW]" },
+  { user: "Asmongold", color: "#FBBF24", content: "OMEGALUL chat is wild" },
+  { user: "xQc", color: "#53FC18", content: "omE omE omE" },
+  { user: "AdinRoss", color: "#FF9B3D", content: "speed1 speed1 SpeedLaugh" },
+  { user: "Lacy", color: "#F43F5E", content: "wideSpeedLaugh3 omE" },
+  { user: "N3on", color: "#E879F9", content: "SpeedLaugh2 SpeedVibe speedWTF" },
+  { user: "Clavicular", color: "#A3E635", content: "omeStare omeJam omeCheer" },
+  { user: "Destiny", color: "#38BDF8", content: "omE speed1 omE speed1" },
 ];
 
 function runDemoChat() {
@@ -647,6 +653,13 @@ function runDemoChat() {
 
 async function start() {
   if (demoMode) {
+    try {
+      // Prefer xQc's 7TV pack (omE / speed / etc.); merge global for common names.
+      const [pack, global] = await Promise.all([loadSevenTvUser(DEMO_7TV_USER_ID), loadSevenTv(0)]);
+      sevenTv = new Map([...global, ...pack]);
+    } catch {
+      sevenTv = new Map();
+    }
     runDemoChat();
     return;
   }

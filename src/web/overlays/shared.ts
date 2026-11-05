@@ -56,6 +56,31 @@ function ingestSevenTvSet(data: any, into: Map<string, SevenTvEmote>) {
   }
 }
 
+function emoteSetFromSevenTvUser(data: any): any | null {
+  if (data?.emote_set?.emotes) return data.emote_set;
+  for (const conn of data?.connections || []) {
+    if (conn?.emote_set?.emotes?.length) return conn.emote_set;
+  }
+  for (const set of data?.emote_sets || []) {
+    if (set?.emotes?.length) return set;
+  }
+  return null;
+}
+
+/** Load a 7TV user's personal / connection emote set by 7TV user id. */
+export async function loadSevenTvUser(userId: string): Promise<Map<string, SevenTvEmote>> {
+  const map = new Map<string, SevenTvEmote>();
+  try {
+    const res = await fetch(`https://7tv.io/v3/users/${encodeURIComponent(userId)}`);
+    if (!res.ok) return map;
+    const set = emoteSetFromSevenTvUser(await res.json());
+    if (set) ingestSevenTvSet(set, map);
+  } catch {
+    // leave empty — caller may fall back to global
+  }
+  return map;
+}
+
 /** Global 7TV set + this Kick user's channel set (when linked on 7TV). */
 export async function loadSevenTv(kickUserId: number): Promise<Map<string, SevenTvEmote>> {
   const map = new Map<string, SevenTvEmote>();
@@ -69,7 +94,8 @@ export async function loadSevenTv(kickUserId: number): Promise<Map<string, Seven
     const user = await fetch(`https://7tv.io/v3/users/kick/${kickUserId}`);
     if (user.ok) {
       const data = await user.json();
-      if (data?.emote_set) ingestSevenTvSet(data.emote_set, map);
+      const set = emoteSetFromSevenTvUser(data) || data?.emote_set;
+      if (set) ingestSevenTvSet(set, map);
     }
   } catch {
     // channel has no 7TV link — global only
