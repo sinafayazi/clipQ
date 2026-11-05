@@ -176,6 +176,5 @@ function mountLava(container: HTMLElement, canvasClass = "footer-lava-canvas") {
 const footer = document.getElementById("footer-lava");
 if (footer) mountLava(footer, "footer-lava-canvas");
 
-/* TEST: flipped lava at hero top (flames point down) — compare with #hero-rays */
 const heroLava = document.getElementById("hero-lava");
 if (heroLava) mountLava(heroLava, "hero-lava-canvas");

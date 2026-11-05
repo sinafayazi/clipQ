@@ -26,7 +26,6 @@
     "better-sqlite3": "^12.4.1",
     "fastify": "^5.6.1",
     "gsap": "^3.15.1",
-    "three": "^0.172.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -35,7 +34,6 @@
     "@types/node": "^22.18.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
-    "@types/three": "^0.187.0",
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^4.7.0",
     "hls.js": "^1.6.13",

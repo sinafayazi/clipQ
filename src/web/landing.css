@@ -314,7 +314,6 @@ code {
   padding-block: 5.5rem 3.25rem;
 }
 
-/* TEST: footer lava at hero top, flipped so flames point down */
 .hero-lava {
   position: absolute;
   inset: 0;
@@ -344,36 +343,6 @@ code {
   /* scaleY(-1) flips axes: positive translateY moves the fire toward the page top */
   transform: scaleY(-1) translateY(20%);
   transform-origin: center;
-}
-
-/* Spell UI Light Rays — primary + gray on black (https://spell.sh/docs/light-rays) */
-.hero-rays {
-  position: absolute;
-  /* Reach under the sticky header + a bit more so rays sit at the page top */
-  inset: 0;
-  top: calc(-1 * (var(--header-h, 3.75rem) + 1.25rem));
-  z-index: 0;
-  pointer-events: none;
-  background: #000;
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    #000 0%,
-    #000 72%,
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to bottom,
-    #000 0%,
-    #000 72%,
-    transparent 100%
-  );
-}
-
-.hero-rays-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 
 .hero-copy,
