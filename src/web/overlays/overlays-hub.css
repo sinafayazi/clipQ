@@ -3,8 +3,8 @@
 
 .app.overlays-hub,
 .overlays-hub {
-  --sidebar-width: 20rem;
-  --pad: var(--space);
+  --sidebar-width: 22rem;
+  --pad: 1.15rem;
 
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -49,12 +49,12 @@
 
 .overlays-hub .overlays-sidebar-scroll {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 1.25rem var(--pad) 1.75rem;
-  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: #5a5a5a transparent;
 }
@@ -62,7 +62,8 @@
 .overlays-hub .overlays-controls {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.65rem;
+  min-width: 0;
 }
 
 .overlays-hub .overlays-fieldset {
@@ -72,27 +73,40 @@
   min-width: 0;
 }
 
-.overlays-hub .overlays-fieldset legend,
-.overlays-hub .overlays-link-label,
-.overlays-hub .field label {
-  margin: 0 0 0.4rem;
+.overlays-hub .overlays-fieldset > legend,
+.overlays-hub .overlays-link-label {
+  display: block;
+  margin: 0 0 0.75rem;
   padding: 0;
-  font-size: 0.875rem;
-  font-weight: 600;
-  line-height: 1.3;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
   color: var(--color-text);
 }
 
+.overlays-hub .overlays-inline-label,
+.overlays-hub .field label {
+  display: block;
+  margin: 0 0 0.45rem;
+  padding: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--color-text-secondary);
+}
+
 .overlays-hub .field {
-  gap: 0.4rem;
+  min-width: 0;
+  gap: 0.5rem;
 }
 
 .overlays-hub .overlays-fieldset .chips {
-  margin-top: 0.15rem;
+  margin-top: 0;
 }
 
 .overlays-hub .overlays-field-hint {
-  margin: 0.45rem 0 0;
+  margin: 0.65rem 0 0;
   font-size: 0.8125rem;
   line-height: 1.4;
   color: var(--color-text-secondary);
@@ -100,14 +114,128 @@
 
 .overlays-hub .overlays-field-grid {
   display: grid;
-  gap: 1rem;
+  gap: 1.1rem;
+  min-width: 0;
+}
+
+.overlays-hub .overlays-select {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+
+.overlays-hub .overlays-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid rgb(9 9 11 / 0.45);
+  border-radius: var(--radius-control);
+  background: linear-gradient(to bottom, #141414, #0a0a0a);
+  color: var(--color-text);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    inset 0 -1px 0 rgb(0 0 0 / 0.35);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: start;
+  cursor: pointer;
+}
+
+.overlays-hub .overlays-select-trigger:active {
+  transform: scale(0.96);
+}
+
+.overlays-hub .overlays-select-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overlays-hub .overlays-select-chevron {
+  flex: none;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-inline-end: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-0.12rem);
+  opacity: 0.7;
+  transition: transform 140ms ease;
+}
+
+.overlays-hub .overlays-select.is-open .overlays-select-chevron {
+  transform: rotate(225deg) translateY(-0.05rem);
+}
+
+.overlays-hub .overlays-select-menu {
+  position: absolute;
+  z-index: 5;
+  inset-inline: 0;
+  top: calc(100% + 0.35rem);
+  margin: 0;
+  padding: 0.3rem;
+  list-style: none;
+  border-radius: calc(var(--radius-control) + 2px);
+  background: #121212;
+  box-shadow:
+    0 12px 28px rgb(0 0 0 / 0.55),
+    inset 0 0 0 1px var(--color-border);
+}
+
+.overlays-hub .overlays-select-option {
+  display: block;
+  width: 100%;
+  min-height: 2.15rem;
+  padding: 0.4rem 0.65rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: start;
+  cursor: pointer;
+}
+
+.overlays-hub .overlays-select-option[aria-selected="true"] {
+  background: var(--color-bg-raised);
+}
+
+.overlays-hub .overlays-select-option:active {
+  transform: scale(0.96);
+}
+
+@media (hover: hover) {
+  .overlays-hub .overlays-select-trigger:hover,
+  .overlays-hub .overlays-select-option:hover {
+    background: #1a1a1a;
+  }
+
+  .overlays-hub .overlays-select-option[aria-selected="true"]:hover {
+    background: #222;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlays-hub .overlays-select-chevron,
+  .overlays-hub .overlays-select-trigger:active,
+  .overlays-hub .overlays-select-option:active {
+    transition: none;
+    transform: none;
+  }
 }
 
 .overlays-hub .overlays-color {
   display: grid;
-  grid-template-columns: 2.5rem 1fr;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
   gap: 0.65rem;
   align-items: center;
+  min-width: 0;
 }
 
 .overlays-hub .overlays-color input[type="color"] {
@@ -125,15 +253,19 @@
 }
 
 .overlays-hub .overlays-color input[type="text"] {
+  min-width: 0;
+  width: 100%;
   font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
   text-transform: lowercase;
 }
 
 .overlays-hub .overlays-range {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.65rem;
+  grid-template-columns: minmax(0, 1fr) 3.5rem;
+  gap: 0.75rem;
   align-items: center;
+  min-width: 0;
+  width: 100%;
 }
 
 .overlays-hub .overlays-range input[type="range"] {
@@ -190,11 +322,20 @@
 }
 
 .overlays-hub .overlays-range output {
-  min-width: 3rem;
+  width: 3.5rem;
+  min-width: 0;
+  overflow: hidden;
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--color-text);
   text-align: end;
+  white-space: nowrap;
+}
+
+.overlays-hub .field input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .overlays-hub .overlays-link-block {
@@ -269,9 +410,33 @@
   min-height: 28rem;
   border-radius: var(--radius-player);
   overflow: hidden;
-  background-color: #0a0a0a;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Crect width='12' height='12' fill='%23141414'/%3E%3Crect x='12' y='12' width='12' height='12' fill='%23141414'/%3E%3C/svg%3E");
+  background-color: #2a2a2a;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Crect width='12' height='12' fill='%23363636'/%3E%3Crect x='12' y='12' width='12' height='12' fill='%23363636'/%3E%3C/svg%3E");
   box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.overlays-hub .overlays-preview-pane-chat {
+  background-color: #1a1420;
+  background-image: url("/overlays/chat-preview-bg.jpg");
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.overlays-hub .overlays-preview-pane-chat .overlays-preview-meta {
+  flex: none;
+  width: 100%;
+}
+
+/* Full-bleed transparent iframe — chat column is centered inside the overlay. */
+.overlays-hub .overlays-preview-pane-chat .overlay-preview-chat {
+  flex: 1;
+  align-self: stretch;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  background-color: transparent !important;
+  color-scheme: dark;
 }
 
 .overlays-hub .overlays-preview-meta {

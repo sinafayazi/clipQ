@@ -9,6 +9,7 @@ import {
   CHAT_SETTINGS_MESSAGE,
   DEFAULT_CHAT_SETTINGS,
   DEFAULT_STREAK_SETTINGS,
+  BG_STYLE_OPTIONS,
   FADE_IN_OPTIONS,
   FONT_OPTIONS,
   LAYOUT_OPTIONS,
@@ -36,6 +37,7 @@ import {
   streakObsQuery,
   streakPreviewShellQuery,
   withOverlayQuery,
+  type ChatBgStyle,
   type ChatFadeIn,
   type ChatFont,
   type ChatLayout,
@@ -62,6 +64,92 @@ function readTab(): OverlayTab {
   } catch {
     return "chat";
   }
+}
+
+function FontSelect({
+  value,
+  googleFamily,
+  onChange,
+}: {
+  value: ChatFont;
+  googleFamily: string;
+  onChange: (font: ChatFont) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const current =
+    value === "custom"
+      ? { label: googleFamily.trim() || "Google Fonts…", stack: fontStack("custom", googleFamily) }
+      : FONT_OPTIONS.find((opt) => opt.id === value) ?? FONT_OPTIONS[0]!;
+
+  const pick = (font: ChatFont) => {
+    onChange(font);
+    setOpen(false);
+  };
+
+  return (
+    <div className={`overlays-select${open ? " is-open" : ""}`} ref={rootRef}>
+      <button
+        type="button"
+        id="chat-font"
+        className="overlays-select-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls="chat-font-list"
+        style={{ fontFamily: current.stack }}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="overlays-select-value">{current.label}</span>
+        <span className="overlays-select-chevron" aria-hidden="true" />
+      </button>
+      {open ? (
+        <ul id="chat-font-list" className="overlays-select-menu" role="listbox" aria-labelledby="chat-font">
+          {FONT_OPTIONS.map((opt) => (
+            <li key={opt.id} role="presentation">
+              <button
+                type="button"
+                role="option"
+                aria-selected={value === opt.id}
+                className="overlays-select-option"
+                style={{ fontFamily: opt.stack }}
+                onClick={() => pick(opt.id)}
+              >
+                {opt.label}
+              </button>
+            </li>
+          ))}
+          <li role="presentation">
+            <button
+              type="button"
+              role="option"
+              aria-selected={value === "custom"}
+              className="overlays-select-option"
+              onClick={() => pick("custom")}
+            >
+              Google Fonts…
+            </button>
+          </li>
+        </ul>
+      ) : null}
+    </div>
+  );
 }
 
 function OverlaysHub() {
@@ -333,6 +421,26 @@ function OverlaysHub() {
                 </fieldset>
 
                 <fieldset className="overlays-fieldset">
+                  <legend>Background style</legend>
+                  <div className="chips" role="group" aria-label="Message background style">
+                    {BG_STYLE_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className="chip"
+                        aria-pressed={chat.bgStyle === opt.id}
+                        onClick={() => patchChat("bgStyle", opt.id as ChatBgStyle)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="overlays-field-hint">
+                    {BG_STYLE_OPTIONS.find((opt) => opt.id === chat.bgStyle)?.hint}
+                  </p>
+                </fieldset>
+
+                <fieldset className="overlays-fieldset">
                   <legend>Profile pics</legend>
                   <div className="chips" role="group" aria-label="Profile pictures">
                     {(
@@ -359,209 +467,220 @@ function OverlaysHub() {
                   </p>
                 </fieldset>
 
-                <div className="field">
-                  <label htmlFor="chat-font">Font</label>
-                  <select
-                    id="chat-font"
-                    value={chat.font}
-                    style={{ fontFamily: fontStack(chat.font, chat.googleFontFamily) }}
-                    onChange={(e) => patchChat("font", e.target.value as ChatFont)}
-                  >
-                    {FONT_OPTIONS.map((opt) => (
-                      <option key={opt.id} value={opt.id} style={{ fontFamily: opt.stack }}>
-                        {opt.label}
-                      </option>
-                    ))}
-                    <option value="custom">Google Fonts…</option>
-                  </select>
-                </div>
-
-                {chat.font === "custom" ? (
-                  <div className="field">
-                    <label htmlFor="chat-google-font">Google Fonts link</label>
-                    <input
-                      id="chat-google-font"
-                      type="url"
-                      inputMode="url"
-                      autoComplete="off"
-                      spellCheck={false}
-                      placeholder="Paste a Google Fonts CSS or specimen link"
-                      value={chat.googleFontLink}
-                      onChange={(e) => {
-                        const link = e.target.value;
-                        const parsed = parseGoogleFontsInput(link);
-                        setChat((prev) => ({
-                          ...prev,
-                          font: "custom",
-                          googleFontLink: link,
-                          googleFontFamily: parsed?.family ?? "",
-                        }));
-                      }}
-                    />
-                    {chat.googleFontFamily ? (
-                      <p
-                        className="overlays-field-hint"
-                        style={{ fontFamily: fontStack("custom", chat.googleFontFamily) }}
-                      >
-                        Using {chat.googleFontFamily}
-                      </p>
-                    ) : chat.googleFontLink.trim() ? (
-                      <p className="overlays-field-hint">Couldn’t read a font from that link.</p>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                <div className="overlays-field-grid">
-                  <div className="field">
-                    <label htmlFor="chat-font-size">Font size</label>
-                    <div className="overlays-range">
-                      <input
-                        id="chat-font-size"
-                        type="range"
-                        min={12}
-                        max={48}
-                        step={1}
-                        value={chat.fontSize}
-                        onChange={(e) => patchChat("fontSize", clampFontSize(Number(e.target.value)))}
-                      />
-                      <output htmlFor="chat-font-size" aria-live="polite">
-                        {chat.fontSize}px
-                      </output>
-                    </div>
-                  </div>
-
-                  <div className="field">
-                    <label htmlFor="chat-font-weight">Font weight</label>
-                    <div className="overlays-range">
-                      <input
-                        id="chat-font-weight"
-                        type="range"
-                        min={400}
-                        max={900}
-                        step={100}
-                        value={chat.fontWeight}
-                        onChange={(e) => patchChat("fontWeight", clampFontWeight(Number(e.target.value)))}
-                      />
-                      <output htmlFor="chat-font-weight" aria-live="polite">
-                        {chat.fontWeight}
-                      </output>
-                    </div>
-                  </div>
-
-                  <div className="field">
-                    <label htmlFor="chat-bg-color">Background</label>
-                    <div className="overlays-color">
-                      <input
-                        id="chat-bg-color"
-                        type="color"
-                        value={sanitizeBgColor(chat.bgColor)}
-                        onChange={(e) => patchChat("bgColor", sanitizeBgColor(e.target.value))}
-                        aria-label="Background color"
-                      />
-                      <input
-                        id="chat-bg-hex"
-                        type="text"
-                        spellCheck={false}
-                        autoComplete="off"
-                        maxLength={7}
-                        defaultValue={sanitizeBgColor(chat.bgColor)}
-                        key={sanitizeBgColor(chat.bgColor)}
-                        onBlur={(e) => patchChat("bgColor", sanitizeBgColor(e.target.value))}
-                        onKeyDown={(e) => {
-                          if (e.key !== "Enter") return;
-                          e.currentTarget.blur();
-                        }}
-                        aria-label="Background hex color"
-                      />
-                    </div>
-                    <div className="overlays-range" style={{ marginTop: 10 }}>
-                      <input
-                        id="chat-bg-opacity"
-                        type="range"
-                        min={0}
-                        max={100}
-                        step={1}
-                        value={chat.bgOpacity}
-                        onChange={(e) => patchChat("bgOpacity", clampBgOpacity(Number(e.target.value)))}
-                        aria-label="Background opacity"
-                      />
-                      <output htmlFor="chat-bg-opacity" aria-live="polite">
-                        {chat.bgOpacity}%
-                      </output>
-                    </div>
-                    <p className="overlays-field-hint">
-                      Color tints the full panel and Cards / Portraits / Stripe plates. Opacity 0% keeps the panel clear
-                      for OBS.
-                    </p>
-                  </div>
-
-                  <div className="field">
-                    <label htmlFor="chat-fade-out">Fade out</label>
-                    <div className="overlays-range">
-                      <input
-                        id="chat-fade-out"
-                        type="range"
-                        min={2}
-                        max={120}
-                        step={1}
-                        value={Math.round(chat.fadeOutMs / 1000)}
-                        onChange={(e) => patchChat("fadeOutMs", clampFadeOutMs(Number(e.target.value) * 1000))}
-                      />
-                      <output htmlFor="chat-fade-out" aria-live="polite">
-                        {Math.round(chat.fadeOutMs / 1000)}s
-                      </output>
-                    </div>
-                  </div>
-                </div>
-
                 <fieldset className="overlays-fieldset">
-                  <legend>Fade in</legend>
-                  <div className="chips" role="group" aria-label="Fade in animation">
-                    {FADE_IN_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        className="chip"
-                        aria-pressed={chat.fadeIn === opt.id}
-                        onClick={() => patchChat("fadeIn", opt.id as ChatFadeIn)}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+                  <legend>Typography</legend>
+                  <div className="overlays-field-grid">
+                    <div className="field">
+                      <label htmlFor="chat-font">Font</label>
+                      <FontSelect
+                        value={chat.font}
+                        googleFamily={chat.googleFontFamily}
+                        onChange={(font) => patchChat("font", font)}
+                      />
+                    </div>
+
+                    {chat.font === "custom" ? (
+                      <div className="field">
+                        <label htmlFor="chat-google-font">Google Fonts link</label>
+                        <input
+                          id="chat-google-font"
+                          type="url"
+                          inputMode="url"
+                          autoComplete="off"
+                          spellCheck={false}
+                          placeholder="Paste a Google Fonts CSS or specimen link"
+                          value={chat.googleFontLink}
+                          onChange={(e) => {
+                            const link = e.target.value;
+                            const parsed = parseGoogleFontsInput(link);
+                            setChat((prev) => ({
+                              ...prev,
+                              font: "custom",
+                              googleFontLink: link,
+                              googleFontFamily: parsed?.family ?? "",
+                            }));
+                          }}
+                        />
+                        {chat.googleFontFamily ? (
+                          <p
+                            className="overlays-field-hint"
+                            style={{ fontFamily: fontStack("custom", chat.googleFontFamily) }}
+                          >
+                            Using {chat.googleFontFamily}
+                          </p>
+                        ) : chat.googleFontLink.trim() ? (
+                          <p className="overlays-field-hint">Couldn’t read a font from that link.</p>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    <div className="field">
+                      <label htmlFor="chat-font-size">Font size</label>
+                      <div className="overlays-range">
+                        <input
+                          id="chat-font-size"
+                          type="range"
+                          min={12}
+                          max={48}
+                          step={1}
+                          value={chat.fontSize}
+                          onChange={(e) => patchChat("fontSize", clampFontSize(Number(e.target.value)))}
+                        />
+                        <output htmlFor="chat-font-size" aria-live="polite">
+                          {chat.fontSize}px
+                        </output>
+                      </div>
+                    </div>
+
+                    <div className="field">
+                      <label htmlFor="chat-font-weight">Font weight</label>
+                      <div className="overlays-range">
+                        <input
+                          id="chat-font-weight"
+                          type="range"
+                          min={400}
+                          max={900}
+                          step={100}
+                          value={chat.fontWeight}
+                          onChange={(e) => patchChat("fontWeight", clampFontWeight(Number(e.target.value)))}
+                        />
+                        <output htmlFor="chat-font-weight" aria-live="polite">
+                          {chat.fontWeight}
+                        </output>
+                      </div>
+                    </div>
                   </div>
                 </fieldset>
 
-                <div className="overlays-field-grid">
-                  <div className="field">
-                    <label htmlFor="chat-gap">Space between</label>
-                    <div className="overlays-range">
-                      <input
-                        id="chat-gap"
-                        type="range"
-                        min={0}
-                        max={48}
-                        step={1}
-                        value={chat.messageGap}
-                        onChange={(e) => patchChat("messageGap", clampMessageGap(Number(e.target.value)))}
-                      />
-                      <output htmlFor="chat-gap" aria-live="polite">
-                        {chat.messageGap}px
-                      </output>
+                <fieldset className="overlays-fieldset">
+                  <legend>Background</legend>
+                  <div className="overlays-field-grid">
+                    <div className="field">
+                      <label htmlFor="chat-bg-color">Color</label>
+                      <div className="overlays-color">
+                        <input
+                          id="chat-bg-color"
+                          type="color"
+                          value={sanitizeBgColor(chat.bgColor)}
+                          onChange={(e) => patchChat("bgColor", sanitizeBgColor(e.target.value))}
+                          aria-label="Background color"
+                        />
+                        <input
+                          id="chat-bg-hex"
+                          type="text"
+                          spellCheck={false}
+                          autoComplete="off"
+                          maxLength={7}
+                          defaultValue={sanitizeBgColor(chat.bgColor)}
+                          key={sanitizeBgColor(chat.bgColor)}
+                          onBlur={(e) => patchChat("bgColor", sanitizeBgColor(e.target.value))}
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter") return;
+                            e.currentTarget.blur();
+                          }}
+                          aria-label="Background hex color"
+                        />
+                      </div>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="chat-bg-opacity">Opacity</label>
+                      <div className="overlays-range">
+                        <input
+                          id="chat-bg-opacity"
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={chat.bgOpacity}
+                          onChange={(e) => patchChat("bgOpacity", clampBgOpacity(Number(e.target.value)))}
+                        />
+                        <output htmlFor="chat-bg-opacity" aria-live="polite">
+                          {chat.bgOpacity}%
+                        </output>
+                      </div>
                     </div>
                   </div>
+                  <p className="overlays-field-hint">
+                    Color tints the full panel and message plates (Plate, Stripe, Glass, and others). Opacity 0% keeps
+                    the panel clear for OBS.
+                  </p>
+                </fieldset>
 
-                  <div className="field">
-                    <label htmlFor="chat-max">Max messages</label>
-                    <input
-                      id="chat-max"
-                      type="number"
-                      min={5}
-                      max={100}
-                      value={chat.maxMessages}
-                      onChange={(e) => patchChat("maxMessages", clampMaxMessages(Number(e.target.value)))}
-                    />
+                <fieldset className="overlays-fieldset">
+                  <legend>Motion</legend>
+                  <div className="overlays-field-grid">
+                    <div className="field">
+                      <label htmlFor="chat-fade-out">Fade out</label>
+                      <div className="overlays-range">
+                        <input
+                          id="chat-fade-out"
+                          type="range"
+                          min={2}
+                          max={120}
+                          step={1}
+                          value={Math.round(chat.fadeOutMs / 1000)}
+                          onChange={(e) => patchChat("fadeOutMs", clampFadeOutMs(Number(e.target.value) * 1000))}
+                        />
+                        <output htmlFor="chat-fade-out" aria-live="polite">
+                          {Math.round(chat.fadeOutMs / 1000)}s
+                        </output>
+                      </div>
+                    </div>
+                    <div className="field">
+                      <span className="overlays-inline-label" id="chat-fade-in-label">
+                        Fade in
+                      </span>
+                      <div className="chips" role="group" aria-labelledby="chat-fade-in-label">
+                        {FADE_IN_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            className="chip"
+                            aria-pressed={chat.fadeIn === opt.id}
+                            onClick={() => patchChat("fadeIn", opt.id as ChatFadeIn)}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                </fieldset>
+
+                <fieldset className="overlays-fieldset">
+                  <legend>Messages</legend>
+                  <div className="overlays-field-grid">
+                    <div className="field">
+                      <label htmlFor="chat-gap">Space between</label>
+                      <div className="overlays-range">
+                        <input
+                          id="chat-gap"
+                          type="range"
+                          min={0}
+                          max={48}
+                          step={1}
+                          value={chat.messageGap}
+                          onChange={(e) => patchChat("messageGap", clampMessageGap(Number(e.target.value)))}
+                        />
+                        <output htmlFor="chat-gap" aria-live="polite">
+                          {chat.messageGap}px
+                        </output>
+                      </div>
+                    </div>
+
+                    <div className="field">
+                      <label htmlFor="chat-max">Max messages</label>
+                      <input
+                        id="chat-max"
+                        type="number"
+                        min={5}
+                        max={100}
+                        value={chat.maxMessages}
+                        onChange={(e) => patchChat("maxMessages", clampMaxMessages(Number(e.target.value)))}
+                      />
+                    </div>
+                  </div>
+                </fieldset>
 
                 <div className="overlays-link-block">
                   <p className="overlays-link-label">OBS link</p>
@@ -673,7 +792,7 @@ function OverlaysHub() {
 
               {tab === "chat" && (
                 <section
-                  className="overlays-preview-pane"
+                  className="overlays-preview-pane overlays-preview-pane-chat"
                   aria-label="Chat overlay preview"
                 >
                   <div className="overlays-preview-meta">
@@ -691,6 +810,8 @@ function OverlaysHub() {
                     className="overlay-preview overlay-preview-chat"
                     title="Chat overlay preview"
                     src={chatPreviewUrl}
+                    allowTransparency
+                    style={{ backgroundColor: "transparent", colorScheme: "dark" }}
                     onLoad={() => pushChatAppearance()}
                   />
                 </section>
