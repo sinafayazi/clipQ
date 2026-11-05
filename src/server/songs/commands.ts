@@ -12,9 +12,9 @@ import { parseSongQuery } from "./resolve.js";
 //   !wrongsong                                 remove your last request
 //   !songs                                     how many are waiting, and the song page link
 //   !vs (or !voteskip)                         vote to skip the playing song
-//   !volume                                    the song volume
-// Broadcaster and moderators: !sr open|close|play|pause|skip|next|prev|clear, !sr remove <user> (also as
-//   !songs …), !volume <0-100> (or +10 / -10).
+//   !volume                                    the volume (clips and songs)
+// Broadcaster and moderators: !sr open|close|play|pause|skip|next|prev|clear, !sr remove <user>,
+//   !sr votes <n> (votes to skip a song, 0 = off) (also as !songs …), !volume <0-100> (or +10 / -10).
 
 /** Info commands (!song, !songs) answer at most this often per channel. */
 const INFO_COOLDOWN_MS = 10_000;
@@ -42,6 +42,20 @@ export function rejectText(reason: RejectReason, s: SongSettings, retryIn?: numb
     return `you already have ${s.perUserLimit} song${s.perUserLimit === 1 ? "" : "s"} waiting. Type !wrongsong to remove your last one.`;
   }
   return REJECT_TEXT[reason] ?? null;
+}
+
+/** A mod's "40", "+10" or "-10" applied to `current`, kept within 0–`max`. Null if it isn't one. */
+export function adjust(current: number, arg: string | undefined, max: number): number | null {
+  const m = arg?.match(/^([+-]?)(\d{1,4})%?$/);
+  if (!m) return null;
+  const n = Number(m[2]);
+  return Math.max(0, Math.min(max, m[1] === "+" ? current + n : m[1] === "-" ? current - n : n));
+}
+
+/** The bot's answer to `!cq votes` / `!sr votes`. */
+export function votesText(what: "clip" | "song", votes: number, changed: boolean): string {
+  if (votes === 0) return `Vote skip for ${what}s is ${changed ? "now " : ""}off.`;
+  return `${what === "clip" ? "Clip" : "Song"} vote skip ${changed ? "now needs" : "needs"} ${votes} vote${votes === 1 ? "" : "s"}.`;
 }
 
 /** "3:34" or "1:02:03". */
@@ -172,17 +186,15 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
 
   /** `!volume`: anyone sees it; mods set it with a number or a change ("!volume 40", "!volume +10"). */
   function volume(channel: ChannelInfo, msg: ChatMessage, arg: string | undefined) {
-    const s = queues.settings(channel.id).songs;
+    const s = queues.settings(channel.id);
     const canControl = msg.sender.badges.includes("broadcaster") || msg.sender.badges.includes("moderator");
-    const m = arg?.match(/^([+-]?)(\d{1,3})%?$/);
-    if (!m || !canControl) {
-      if (cooled(`${channel.id}:volume`, INFO_COOLDOWN_MS)) void bot.say(channel.id, `Song volume is ${s.volume}%.`, msg.id);
+    const next = canControl ? adjust(s.volume, arg, 100) : null;
+    if (next === null) {
+      if (cooled(`${channel.id}:volume`, INFO_COOLDOWN_MS)) void bot.say(channel.id, `Volume is ${s.volume}%.`, msg.id);
       return;
     }
-    const n = Number(m[2]);
-    const next = Math.max(0, Math.min(100, m[1] === "+" ? s.volume + n : m[1] === "-" ? s.volume - n : n));
-    queues.updateSettings(channel.id, { songs: { ...s, volume: next } });
-    void bot.say(channel.id, `Song volume set to ${next}%.`, msg.id);
+    queues.updateSettings(channel.id, { volume: next });
+    void bot.say(channel.id, `Volume set to ${next}%.`, msg.id);
   }
 
   function modCommand(channel: ChannelInfo, msg: ChatMessage, arg: string, target: string | undefined) {
@@ -219,6 +231,13 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
       case "remove":
         if (target) queues.removeSongsByName(id, target);
         return true;
+      case "votes": {
+        const s = queues.settings(id).songs;
+        const next = adjust(s.voteSkip, target, 1000);
+        if (next !== null) queues.updateSettings(id, { songs: { ...s, voteSkip: next } });
+        void bot.say(id, votesText("song", next ?? s.voteSkip, next !== null), msg.id);
+        return true;
+      }
     }
     return false;
   }

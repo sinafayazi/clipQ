@@ -372,8 +372,8 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
     const songs = s.settings.songs;
     return {
       player: songs.player,
-      volume: songs.volume,
-      normalize: songs.normalize,
+      volume: s.settings.volume,
+      normalize: s.settings.normalize,
       clipPlaying: s.playing.clips,
       control: s.control,
       current: s.songs.current,

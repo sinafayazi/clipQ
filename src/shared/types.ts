@@ -45,7 +45,7 @@ export interface QueueItem {
   duration: number | null;
   /** Direct media URL (Kick clips are HLS). */
   mediaUrl: string | null;
-  /** Songs: YouTube's loudness measure in dB (negative is quieter than its target). */
+  /** YouTube songs and clips: YouTube's loudness measure in dB (negative is quieter than its target). */
   loudness: number | null;
   requestedBy: Requester;
   status: ItemStatus;
@@ -74,10 +74,6 @@ export interface SongSettings {
   access: AccessGroup[];
   /** Where songs play: the dashboard's Songs tab, or the OBS browser-source page. */
   player: "dashboard" | "obs";
-  /** Song volume, 0–100. Mods can change it from chat with `!volume`. */
-  volume: number;
-  /** Turn quiet songs up so they match the rest (as far as the player's 100% allows). */
-  normalize: boolean;
 }
 
 export const DEFAULT_SONG_SETTINGS: SongSettings = {
@@ -89,8 +85,6 @@ export const DEFAULT_SONG_SETTINGS: SongSettings = {
   requestCooldown: 120,
   access: ["everyone"],
   player: "dashboard",
-  volume: 60,
-  normalize: true,
 };
 
 export interface QueueSettings {
@@ -107,6 +101,10 @@ export interface QueueSettings {
   access: Partial<Record<Provider, AccessGroup[]>>;
   /** Viewer votes (`!cvs`) that skip the playing clip. 0 = vote skip off. */
   voteSkip: number;
+  /** One volume for clips and songs, 0–100 (Kick and YouTube; other embeds keep their own). Mods: `!volume`. */
+  volume: number;
+  /** Even out loudness: Kick clips leveled as they play, quiet YouTube videos turned up (YouTube turns loud ones down). */
+  normalize: boolean;
   songs: SongSettings;
 }
 
@@ -118,6 +116,8 @@ export const DEFAULT_SETTINGS: QueueSettings = {
   autoAdvance: true,
   access: {},
   voteSkip: 15,
+  volume: 60,
+  normalize: true,
   songs: DEFAULT_SONG_SETTINGS,
 };
 
@@ -174,13 +174,15 @@ export interface SongsState {
 }
 
 /**
- * The player volume for a song: the song volume moved by YouTube's loudness measure, so every song
- * lands near the same level (loud ones down, quiet ones up). The embedded player doesn't do this
- * itself. Quiet songs can only go up to the player's 100%.
+ * clipQ's part of a YouTube song's (or clip's) volume, in percent: the volume, raised for videos YouTube measured as
+ * quiet (it can go over 100; the player multiplies it with the streamer's own YouTube volume and stops
+ * at YouTube's 100%). Loud songs are left alone: YouTube's embedded player already turns those down
+ * to its target (its "Stats for nerds" shows e.g. "Normalized 52%" for a +5.7 dB song) but never
+ * turns quiet ones up.
  */
 export function songVolume(volume: number, loudness: number | null, normalize: boolean): number {
-  if (!normalize || loudness === null) return volume;
-  return Math.max(0, Math.min(100, Math.round(volume * 10 ** (-loudness / 20))));
+  if (!normalize || loudness === null || loudness >= 0) return volume;
+  return Math.round(volume * 10 ** (-loudness / 20));
 }
 
 /** A queued song with its place in line, for the public song list. */

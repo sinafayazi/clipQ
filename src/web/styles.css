@@ -1175,6 +1175,11 @@ img {
   text-align: center;
 }
 
+.tab-playing {
+  color: var(--color-accent);
+  font-size: 0.7rem;
+}
+
 /* ---- song settings ------------------------------------------------------ */
 
 .copy-link {

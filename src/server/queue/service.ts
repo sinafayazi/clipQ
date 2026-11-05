@@ -33,8 +33,6 @@ export const songSettingsSchema = z.object({
   requestCooldown: z.number().int().min(0).max(3600),
   access: z.array(z.enum(ACCESS_GROUPS)).min(1),
   player: z.enum(["dashboard", "obs"]),
-  volume: z.number().int().min(0).max(100),
-  normalize: z.boolean(),
 });
 
 export const settingsSchema = z.object({
@@ -45,6 +43,8 @@ export const settingsSchema = z.object({
   autoAdvance: z.boolean(),
   access: z.record(z.enum(PROVIDERS), z.array(z.enum(ACCESS_GROUPS)).min(1)),
   voteSkip: z.number().int().min(0).max(1000),
+  volume: z.number().int().min(0).max(100),
+  normalize: z.boolean(),
   songs: songSettingsSchema,
 });
 
@@ -473,13 +473,13 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
       const { meta } = resolved;
       const info = this.db
         .prepare(
-          `INSERT INTO items (channel_id, queue, provider, clip_id, url, start, title, thumbnail, author, duration, media_url,
+          `INSERT INTO items (channel_id, queue, provider, clip_id, url, start, title, thumbnail, author, duration, media_url, loudness,
              requester_id, requester_name, requester_color, message_id, status, position, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)`,
         )
         .run(
           channelId, "clips", resolved.ref.provider, resolved.ref.id, resolved.ref.url, resolved.ref.start ?? null,
-          meta.title, meta.thumbnail, meta.author, meta.duration, meta.mediaUrl,
+          meta.title, meta.thumbnail, meta.author, meta.duration, meta.mediaUrl, meta.loudness ?? null,
           requester.id, requester.username, requester.color, messageId, position, this.now(),
         );
       return { ok: true, item: this.item(channelId, Number(info.lastInsertRowid))! } as const;
@@ -925,6 +925,10 @@ function readSettings(json: string): QueueSettings {
   } catch {}
   const saved = (typeof stored === "object" && stored ? stored : {}) as Partial<QueueSettings>;
   const merged = { ...DEFAULT_SETTINGS, ...saved, songs: { ...DEFAULT_SETTINGS.songs, ...saved.songs } };
+  // Songs used to have their own volume and normalize switch; now one of each covers clips and songs.
+  const oldSongs = saved.songs as { volume?: number; normalize?: boolean } | undefined;
+  if (saved.volume === undefined && oldSongs?.volume !== undefined) merged.volume = oldSongs.volume;
+  if (saved.normalize === undefined && oldSongs?.normalize !== undefined) merged.normalize = oldSongs.normalize;
   // Settings saved before Instagram existed have no `access` field: turn Instagram on for them once.
   // After the next save, `access` is present and the streamer's choice sticks.
   if (saved.providers && !("access" in saved) && !merged.providers.includes("instagram")) {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { findClips, parseClipUrl, parseTimestamp } from "../src/server/clips/parse.js";
+import { parseInstagramEmbed } from "../src/server/clips/resolve.js";
 import { commandsText, parseDuration } from "../src/server/bridge.js";
+import { adjust, votesText } from "../src/server/songs/commands.js";
 import { parseLength, parseLoudness } from "../src/server/songs/resolve.js";
 import { songVolume } from "../src/shared/types.js";
 
@@ -169,6 +171,53 @@ describe("commandsText", () => {
   });
 });
 
+describe("parseInstagramEmbed", () => {
+  // As it appears in the embed page: JSON inside a JSON string inside a script.
+  const html =
+    String.raw`{\"is_video\":true,\"display_url\":\"https:\\\/\\\/cdn.example\\\/p.jpg\",\"video_view_count\":1341657}},` +
+    String.raw`\"video_url\":\"https:\\\/\\\/instagram.fx.fna.fbcdn.net\\\/o1\\\/v.mp4?a=1\\u0026oe=6AED5AA5\",\"video_duration\":82.6,` +
+    String.raw`\"owner\":{\"id\":\"328093556\",\"username\":\"raminikoo\",\"is_verified\":false}`;
+
+  it("finds the video file, length, poster and author", () => {
+    expect(parseInstagramEmbed(html)).toEqual({
+      mediaUrl: "https://instagram.fx.fna.fbcdn.net/o1/v.mp4?a=1&oe=6AED5AA5",
+      duration: 83,
+      thumbnail: "https://cdn.example/p.jpg",
+      author: "raminikoo",
+    });
+  });
+
+  it("plays a carousel's first video", () => {
+    const carousel =
+      String.raw`{\"__typename\":\"GraphSidecar\",\"edge_sidecar_to_children\":{\"edges\":[` +
+      String.raw`{\"node\":{\"is_video\":false,\"display_url\":\"https:\\\/\\\/cdn\\\/1.jpg\"}},` +
+      String.raw`{\"node\":{\"is_video\":true,\"display_url\":\"https:\\\/\\\/cdn\\\/2.jpg\",\"video_url\":\"https:\\\/\\\/cdn\\\/2.mp4\"}}]}}`;
+    expect(parseInstagramEmbed(carousel).mediaUrl).toBe("https://cdn/2.mp4");
+  });
+
+  it("has no file for a photo or a page without the post", () => {
+    expect(parseInstagramEmbed("<html>login</html>")).toEqual({ mediaUrl: null, duration: null, thumbnail: null, author: null });
+  });
+});
+
+describe("mod number commands", () => {
+  it("sets, raises and lowers within bounds", () => {
+    expect(adjust(50, "40", 100)).toBe(40);
+    expect(adjust(50, "+10", 100)).toBe(60);
+    expect(adjust(95, "+10", 100)).toBe(100);
+    expect(adjust(5, "-10", 100)).toBe(0);
+    expect(adjust(15, "2000", 1000)).toBe(1000);
+    expect(adjust(15, undefined, 1000)).toBeNull();
+    expect(adjust(15, "lots", 1000)).toBeNull();
+  });
+
+  it("answers the vote count", () => {
+    expect(votesText("clip", 20, true)).toBe("Clip vote skip now needs 20 votes.");
+    expect(votesText("song", 10, false)).toBe("Song vote skip needs 10 votes.");
+    expect(votesText("clip", 0, true)).toBe("Vote skip for clips is now off.");
+  });
+});
+
 describe("song loudness", () => {
   it("reads YouTube's loudness from the watch page", () => {
     expect(parseLoudness('..."audioConfig":{"loudnessDb":-4.6599998,"perceptualLoudnessDb":-18.66}...')).toBe(-4.66);
@@ -182,10 +231,10 @@ describe("song loudness", () => {
     expect(parseLength("<html></html>")).toBeNull();
   });
 
-  it("turns loud songs down and quiet ones up, up to 100", () => {
-    expect(songVolume(60, -6, true)).toBe(100); // 60 × 2.0, capped at 100
+  it("turns quiet songs up and leaves loud ones to YouTube", () => {
+    expect(songVolume(60, -6, true)).toBe(120); // 60 × 2.0; the player stops at YouTube's 100%
     expect(songVolume(40, -6, true)).toBe(80);
-    expect(songVolume(60, 5.7, true)).toBe(31); // 60 × 0.52
+    expect(songVolume(60, 5.7, true)).toBe(60); // YouTube's player already lowers it to 52%
     expect(songVolume(60, 0, true)).toBe(60);
     expect(songVolume(60, null, true)).toBe(60);
     expect(songVolume(40, -6, false)).toBe(40);
