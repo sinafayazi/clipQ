@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { songVolume, type DashboardUser, type QueueItem, type QueueKind, type QueueState } from "../shared/types";
 import { api, type Connection } from "./api";
 import { clipTitle, formatDuration, PROVIDER_LABEL } from "./clip-meta";
@@ -12,11 +12,14 @@ import {
   LiveIcon,
   LogoutIcon,
   NextIcon,
+  ClipLinkIcon,
   PlayIcon,
   PrevIcon,
   ProviderIcon,
+  QueueClosedIcon,
   SettingsIcon,
   SkipIcon,
+  SongNoteIcon,
   UpIcon,
 } from "./icons";
 import { Player, useAutoplay, usePlayingReport } from "./Player";
@@ -48,7 +51,6 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
     setClearKind(kind);
     clearDialog.current?.showModal();
   };
-  const songs = settings.songs;
 
   const run = useCallback((p: Promise<unknown>) => {
     p.then(
@@ -81,10 +83,12 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
         Skip to content
       </a>
       <header className="topbar">
-        <div className="brand">
-          <span className={`tally${live ? " on" : ""}`} aria-hidden="true" />
-          <div className="brand-text">
-            <h1>clipQ</h1>
+        <div className="topbar-start">
+          <div className="brand">
+            <div className="brand-mark">
+              <span className={`tally${live ? " on" : ""}`} aria-hidden="true" />
+              <h1>clipQ</h1>
+            </div>
             <div className="brand-meta">
               {me && me.channels.length > 1 ? (
                 <ChannelSwitcher me={me} current={channel.id} onError={setError} />
@@ -92,57 +96,35 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
                 <p className="channel">{channel.displayName}</p>
               )}
               <p className={`presence${live ? " live" : ""}`} role="status">
-                <LiveIcon size={16} stroke={live ? 2 : 1.5} />
+                <LiveIcon size={12} stroke={live ? 2 : 1.5} />
                 {live ? "Chat connected" : "Reconnecting to chat"}
               </p>
             </div>
           </div>
+          <div className="tabs" role="tablist" aria-label="Lists">
+            <button type="button" role="tab" id="tab-clips" aria-selected={tab === "clips"} aria-controls="panel-clips" onClick={() => setTab("clips")}>
+              Clips <span className="tab-count">{queue.length}</span>
+            </button>
+            <button type="button" role="tab" id="tab-songs" aria-selected={tab === "songs"} aria-controls="panel-songs" onClick={() => setTab("songs")}>
+              Songs <span className="tab-count">{state.songs.queue.length}</span>
+            </button>
+          </div>
         </div>
-        <div className="topbar-actions">
-          <div className="topbar-toggles">
-            <label className="switch">
-              <input
-                type="checkbox"
-                role="switch"
-                checked={settings.open}
-                aria-checked={settings.open}
-                onChange={() => run(api.settings({ open: !settings.open }))}
-              />
-              <span className="switch-ui" />
-              Clips open
-            </label>
-            <label className="switch">
-              <input
-                type="checkbox"
-                role="switch"
-                checked={songs.open}
-                aria-checked={songs.open}
-                onChange={() => run(api.settings({ songs: { open: !songs.open } }))}
-              />
-              <span className="switch-ui" />
-              Songs open
-            </label>
-          </div>
-          <div className="topbar-tools">
-            <a className="btn btn-ghost" href="/overlays/">
-              Overlays
-            </a>
-            <button type="button" className="btn btn-ghost icon-start" onClick={() => setSettingsOpen(true)}>
-              <SettingsIcon size={18} stroke={2} />
-              Settings
-            </button>
-            <a className="btn btn-ghost" href="https://nowpayments.io/donation/sina" target="_blank" rel="noopener">
-              ♥ Donate
-            </a>
-            <button
-              type="button"
-              className="btn btn-ghost icon-start"
-              onClick={() => api.logout().finally(() => (location.href = "/app/"))}
-            >
-              <LogoutIcon size={18} stroke={2} />
-              Log out
-            </button>
-          </div>
+        <div className="topbar-tools">
+          <a className="btn btn-ghost" href="/overlays/">
+            Overlays
+          </a>
+          <a className="btn btn-ghost" href="https://nowpayments.io/donation/sina" target="_blank" rel="noopener">
+            ♥ Donate
+          </a>
+          <button
+            type="button"
+            className="btn btn-ghost icon-start"
+            onClick={() => api.logout().finally(() => (location.href = "/app/"))}
+          >
+            <LogoutIcon size={18} stroke={2} />
+            Log out
+          </button>
         </div>
       </header>
 
@@ -159,108 +141,107 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
           </div>
         )}
 
-        <div className="tabs" role="tablist" aria-label="Lists">
-          <button type="button" role="tab" id="tab-clips" aria-selected={tab === "clips"} aria-controls="panel-clips" onClick={() => setTab("clips")}>
-            Clips <span className="tab-count">{queue.length}</span>
-          </button>
-          <button type="button" role="tab" id="tab-songs" aria-selected={tab === "songs"} aria-controls="panel-songs" onClick={() => setTab("songs")}>
-            Songs <span className="tab-count">{state.songs.queue.length}</span>
-          </button>
-        </div>
-
         {/* Hidden, not unmounted: a song keeps playing while you look at clips. */}
         <div id="panel-songs" role="tabpanel" aria-labelledby="tab-songs" className="stage" hidden={tab !== "songs"}>
-          <SongsView state={state} run={run} onBan={setBanTarget} onClear={() => askClear("songs")} />
+          <SongsView
+            state={state}
+            run={run}
+            onBan={setBanTarget}
+            onClear={() => askClear("songs")}
+            onSettings={() => setSettingsOpen(true)}
+          />
         </div>
 
         <div id="panel-clips" role="tabpanel" aria-labelledby="tab-clips" className="stage" hidden={tab !== "clips"}>
-        <section className="player-col">
-          <div className="player">
-            {current ? (
-              <Player
-                key={current.id}
-                item={current}
-                onEnded={onEnded}
-                onPlaying={reportClip}
-                blocked={state.playing.songs}
-                autoplay={clipStart.autoplay}
-                control={clipControl}
+          <section className="player-col">
+            <div className="player">
+              {current ? (
+                <Player
+                  key={current.id}
+                  item={current}
+                  onEnded={onEnded}
+                  onPlaying={reportClip}
+                  blocked={state.playing.songs}
+                  autoplay={clipStart.autoplay}
+                  control={clipControl}
+                />
+              ) : (
+                <div className="empty">
+                  <h2>{settings.open ? "Waiting for clips" : "Queue is closed"}</h2>
+                  <p>
+                    {settings.open
+                      ? "New clips from chat will start here."
+                      : "Open the queue to take clips from chat."}
+                  </p>
+                </div>
+              )}
+            </div>
+            {current && (
+              <div className="now">
+                <div className="now-copy">
+                  <a href={current.url} target="_blank" rel="noreferrer" title={current.url}>
+                    <span className="now-title">{clipTitle(current)}</span>
+                    <ExternalIcon size={16} stroke={2} />
+                  </a>
+                  <p className="now-meta">
+                    {PROVIDER_LABEL[current.provider]}
+                    {" · "}
+                    {current.requestedBy.username}
+                    {current.duration != null ? ` · ${formatDuration(current.duration)}` : ""}
+                    {settings.voteSkip > 0 && state.skipVotes > 0 ? ` · Skip votes ${state.skipVotes}/${settings.voteSkip}` : ""}
+                  </p>
+                </div>
+                <BanRequester username={current.requestedBy.username} onBan={setBanTarget} />
+              </div>
+            )}
+            <div className="transport">
+              <div className="transport-nav">
+                <button type="button" className="btn icon-start" onClick={() => run(api.previous())} disabled={!history.length}>
+                  <PrevIcon size={18} stroke={2} />
+                  Previous
+                </button>
+                <button type="button" className="btn icon-start" onClick={() => run(api.next(true))} disabled={!current}>
+                  <SkipIcon size={18} stroke={2} />
+                  Skip
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary icon-start"
+                  onClick={() => run(api.next())}
+                  disabled={!current && !queue.length}
+                >
+                  <NextIcon size={18} stroke={2} />
+                  Next
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <aside className="queue">
+            <QueueTools kind="clips" open={settings.open} run={run} onSettings={() => setSettingsOpen(true)} />
+            <div className="queue-head">
+              <h2>Queue</h2>
+              <p className="queue-count" role="status">
+                {queue.length === 0 ? "None waiting" : `${queue.length} waiting`}
+              </p>
+              <span className="spacer" />
+              {queue.length > 0 && (
+                <button type="button" className="btn btn-ghost" onClick={() => askClear("clips")}>
+                  Clear queue
+                </button>
+              )}
+            </div>
+            {queue.length === 0 ? (
+              <QueueEmptyState
+                open={settings.open}
+                kind="clips"
+                openCopy="Clips show up here when viewers post links in chat."
+                closedCopy="Open the queue to accept clips from chat."
               />
             ) : (
-              <div className="empty">
-                <h2>{settings.open ? "Waiting for clips" : "Queue is closed"}</h2>
-                <p>
-                  {settings.open
-                    ? "New clips from chat will start here."
-                    : "Open the queue to take clips from chat."}
-                </p>
-              </div>
+              <QueueList queue={queue} run={run} onBan={setBanTarget} />
             )}
-          </div>
-          {current && (
-            <div className="now">
-              <div className="now-copy">
-                <a href={current.url} target="_blank" rel="noreferrer" title={current.url}>
-                  <span className="now-title">{clipTitle(current)}</span>
-                  <ExternalIcon size={16} stroke={2} />
-                </a>
-                <p className="now-meta">
-                  {PROVIDER_LABEL[current.provider]}
-                  {" · "}
-                  {current.requestedBy.username}
-                  {current.duration != null ? ` · ${formatDuration(current.duration)}` : ""}
-                  {settings.voteSkip > 0 && state.skipVotes > 0 ? ` · Skip votes ${state.skipVotes}/${settings.voteSkip}` : ""}
-                </p>
-              </div>
-              <BanRequester username={current.requestedBy.username} onBan={setBanTarget} />
-            </div>
-          )}
-          <div className="transport">
-            <div className="transport-nav">
-              <button type="button" className="btn icon-start" onClick={() => run(api.previous())} disabled={!history.length}>
-                <PrevIcon size={18} stroke={2} />
-                Previous
-              </button>
-              <button type="button" className="btn icon-start" onClick={() => run(api.next(true))} disabled={!current}>
-                <SkipIcon size={18} stroke={2} />
-                Skip
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary icon-start"
-                onClick={() => run(api.next())}
-                disabled={!current && !queue.length}
-              >
-                <NextIcon size={18} stroke={2} />
-                Next
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <aside className="queue">
-          <div className="queue-head">
-            <h2>Queue</h2>
-            <p className="queue-count" role="status">
-              {queue.length === 0 ? "None waiting" : `${queue.length} waiting`}
-            </p>
-            <span className="spacer" />
-            {queue.length > 0 && (
-              <button type="button" className="btn btn-ghost" onClick={() => askClear("clips")}>
-                Clear queue
-              </button>
-            )}
-          </div>
-          {queue.length === 0 ? (
-            <p className="queue-empty">
-              {settings.open
-                ? "Clips show up here when viewers post links in chat."
-                : "Open the queue to accept clips from chat."}
-            </p>
-          ) : (
-            <QueueList queue={queue} run={run} onBan={setBanTarget} />
-          )}
-        </aside>
+          </aside>
         </div>
       </main>
 
@@ -349,17 +330,75 @@ function readTab(): string | null {
   }
 }
 
+function QueueEmptyState({
+  open,
+  kind,
+  openCopy,
+  closedCopy,
+}: {
+  open: boolean;
+  kind: QueueKind;
+  openCopy: ReactNode;
+  closedCopy: ReactNode;
+}) {
+  const Icon = !open ? QueueClosedIcon : kind === "songs" ? SongNoteIcon : ClipLinkIcon;
+  return (
+    <div className="queue-empty" role="status">
+      <span className="queue-empty-icon" aria-hidden="true">
+        <Icon size={28} stroke={1.75} />
+      </span>
+      <p>{open ? openCopy : closedCopy}</p>
+    </div>
+  );
+}
+
+function QueueTools({
+  kind,
+  open,
+  run,
+  onSettings,
+}: {
+  kind: QueueKind;
+  open: boolean;
+  run: (p: Promise<unknown>) => void;
+  onSettings: () => void;
+}) {
+  return (
+    <div className="queue-tools">
+      <label className="switch">
+        <input
+          type="checkbox"
+          role="switch"
+          checked={open}
+          aria-checked={open}
+          onChange={() =>
+            run(kind === "clips" ? api.settings({ open: !open }) : api.settings({ songs: { open: !open } }))
+          }
+        />
+        <span className="switch-ui" />
+        {kind === "clips" ? "Clips open" : "Songs open"}
+      </label>
+      <button type="button" className="btn btn-ghost icon-start" onClick={onSettings}>
+        <SettingsIcon size={18} stroke={2} />
+        Settings
+      </button>
+    </div>
+  );
+}
+
 /** The song request list: its own player (or a pointer to the OBS page), controls and queue. */
 function SongsView({
   state,
   run,
   onBan,
   onClear,
+  onSettings,
 }: {
   state: QueueState;
   run: (p: Promise<unknown>) => void;
   onBan: (username: string) => void;
   onClear: () => void;
+  onSettings: () => void;
 }) {
   const { current, queue, history, skipVotes, obsUrl } = state.songs;
   const s = state.settings.songs;
@@ -458,6 +497,7 @@ function SongsView({
       </section>
 
       <aside className="queue">
+        <QueueTools kind="songs" open={s.open} run={run} onSettings={onSettings} />
         <div className="queue-head">
           <h2>Songs</h2>
           <p className="queue-count" role="status">
@@ -474,15 +514,16 @@ function SongsView({
           )}
         </div>
         {queue.length === 0 ? (
-          <p className="queue-empty">
-            {s.open ? (
+          <QueueEmptyState
+            open={s.open}
+            kind="songs"
+            openCopy={
               <>
                 Songs show up here when viewers type <code>!sr</code> in chat.
               </>
-            ) : (
-              "Turn on Songs open to take songs from chat."
-            )}
-          </p>
+            }
+            closedCopy="Turn on Songs open to take songs from chat."
+          />
         ) : (
           <QueueList queue={queue} run={run} onBan={onBan} />
         )}

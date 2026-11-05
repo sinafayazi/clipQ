@@ -72,7 +72,7 @@ function Login() {
                 spellCheck={false}
               />
             </div>
-            <button className="btn">Dev login</button>
+            <button className="btn btn-primary">Dev login</button>
           </form>
         )}
         {cfg && !cfg.oauth && !cfg.devLogin && (
