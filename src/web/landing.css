@@ -41,6 +41,16 @@ html {
   background: var(--bg);
 }
 
+/* Lenis root — keep native document flow, no transform hijack */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+html.lenis {
+  scroll-behavior: auto !important;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -817,7 +827,8 @@ code {
   min-height: 0;
   height: 100%;
   padding: 1rem 1rem 1.15rem;
-  overflow: auto;
+  /* hidden — overflow:auto makes Lenis treat the mock as a nested scroller */
+  overflow: hidden;
   background: #0a0a0a;
 }
 

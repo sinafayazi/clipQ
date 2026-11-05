@@ -1,8 +1,35 @@
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import Lenis from "lenis";
+import "lenis/dist/lenis.css";
 import { setAsciiThumbPalette, paletteForProvider } from "./landing-ascii-thumb";
 
 gsap.registerPlugin(ScrollTrigger);
+
+let lenis: Lenis | null = null;
+
+function initLenis() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
+
+  const instance = new Lenis({
+    // Lerp (not duration) — soft follow without the heavy, laggy glide.
+    lerp: 0.12,
+    smoothWheel: true,
+    wheelMultiplier: 1,
+    touchMultiplier: 1,
+    syncTouch: false,
+    anchors: true,
+    autoRaf: true,
+    // Keep page scroll uniform over the Safari mock (no nested scroll traps).
+    allowNestedScroll: false,
+  });
+
+  instance.on("scroll", ScrollTrigger.update);
+  // Keep GSAP's clock honest while Lenis owns the wheel.
+  gsap.ticker.lagSmoothing(0);
+
+  return instance;
+}
 
 function start() {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -382,16 +409,19 @@ function initCommandsTerminal() {
   );
 }
 
+lenis = initLenis();
 start();
 
 function syncHeaderScroll() {
   const header = document.querySelector(".site-header");
   if (!header) return;
   const onScroll = () => {
-    header.classList.toggle("is-scrolled", window.scrollY > 8);
+    const y = lenis?.scroll ?? window.scrollY;
+    header.classList.toggle("is-scrolled", y > 8);
   };
   onScroll();
-  window.addEventListener("scroll", onScroll, { passive: true });
+  if (lenis) lenis.on("scroll", onScroll);
+  else window.addEventListener("scroll", onScroll, { passive: true });
 }
 
 syncHeaderScroll();
