@@ -34,14 +34,14 @@ function hexToRgba(hex: string): [number, number, number, number] {
   ];
 }
 
-function mountLava(container: HTMLElement) {
+function mountLava(container: HTMLElement, canvasClass = "footer-lava-canvas") {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
     container.style.background = FALLBACK_GRADIENT;
     return;
   }
 
   const canvas = document.createElement("canvas");
-  canvas.className = "footer-lava-canvas";
+  canvas.className = canvasClass;
   container.append(canvas);
 
   const gl = canvas.getContext("webgl2", {
@@ -173,5 +173,9 @@ function mountLava(container: HTMLElement) {
   io.observe(container);
 }
 
-const root = document.getElementById("footer-lava");
-if (root) mountLava(root);
+const footer = document.getElementById("footer-lava");
+if (footer) mountLava(footer, "footer-lava-canvas");
+
+/* TEST: flipped lava at hero top (flames point down) — compare with #hero-rays */
+const heroLava = document.getElementById("hero-lava");
+if (heroLava) mountLava(heroLava, "hero-lava-canvas");
