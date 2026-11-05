@@ -35,10 +35,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Source+Sans+3:wght@400;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
     />
     <link rel="stylesheet" href="./landing.css" />
     <script type="module" src="./landing-demo.ts"></script>
+    <script type="module" src="./landing-motion.ts"></script>
+    <script type="module" src="./landing-platforms.ts"></script>
+    <script type="module" src="./landing-lava.ts"></script>
 
     <script type="application/ld+json">
       {
@@ -93,35 +96,25 @@
     <header class="site-header">
       <div class="wrap">
         <a class="logo" href="/"><span class="tally" aria-hidden="true"></span>clipQ</a>
-        <nav class="nav" aria-label="Sections">
-          <a href="#how">How it works</a>
-          <a href="#features">Features</a>
-          <a href="#faq">FAQ</a>
-        </nav>
-        <a class="lang" href="/fa/" hreflang="fa" lang="fa">فارسی</a>
-        <a class="btn" href="/app/">Open dashboard</a>
+        <a class="header-login" href="/app/">Log in</a>
       </div>
     </header>
 
     <main id="main">
-      <div class="hero">
-        <div class="wrap">
-          <div>
-            <p class="eyebrow"><span class="tally" aria-hidden="true"></span>For Kick streamers</p>
-            <h1>Your chat picks the clips. <em>You hit play.</em></h1>
-            <p class="lede">
-              clipQ turns clip links posted in your Kick chat into a tidy queue. Watch them on stream one after another, skip the
-              bad ones, and let your mods keep it clean.
-            </p>
-            <div class="cta-row">
-              <a class="btn btn-primary btn-lg" href="/app/">Log in with Kick, it's free</a>
-              <a class="btn btn-lg" href="#how">See how it works</a>
-            </div>
-            <p class="fineprint">No download, no bot to add. Log in once and clipQ starts listening to your chat.</p>
+      <section class="hero">
+        <div class="wrap hero-copy">
+          <h1>Your chat picks the clips. You hit play.</h1>
+          <p class="lede">
+            Viewers drop Kick, YouTube, Twitch, TikTok and more into chat. clipQ lines them up so you can watch them on stream, in order.
+          </p>
+          <div class="cta-row">
+            <a class="rich-btn rich-btn-red rich-btn-lg" href="/app/">Log in with Kick</a>
+            <a class="rich-btn rich-btn-zinc rich-btn-lg" href="#how">How it works</a>
           </div>
+        </div>
 
+        <div class="wrap">
           <figure class="demo" aria-label="Example: links posted in Kick chat appear in the clipQ queue">
-            <span class="demo-badge">Example</span>
             <div class="demo-panels" aria-hidden="true">
               <div class="demo-chat">
                 <p class="demo-head"><span class="kick-dot"></span>Kick chat</p>
@@ -150,169 +143,264 @@
                 </ol>
               </div>
             </div>
-            <figcaption>Viewers post links in chat. Each one lands in your queue, in order.</figcaption>
+            <figcaption>Links in chat become a queue, in the order they arrived.</figcaption>
           </figure>
         </div>
-      </div>
+      </section>
 
       <section id="how">
-        <div class="wrap">
-          <div class="section-head">
+        <div class="wrap how-layout">
+          <div class="section-head" data-reveal>
             <h2>How it works</h2>
-            <p>Set it up once in about a minute. After that it runs by itself.</p>
+            <p>About a minute to set up. After that it runs by itself.</p>
           </div>
-          <ol class="steps">
+          <div class="feature-art" data-art aria-hidden="true">
+            <div class="how-scene" data-how-scene>
+              <div class="how-col how-chat" data-how-col>
+                <p class="how-col-head"><span class="kick-dot"></span>Chat</p>
+                <div class="how-chat-feed" data-how-feed>
+                  <p class="how-msg"><b style="color:#ffa600">Radin</b> W stream</p>
+                  <p class="how-msg how-msg-link" data-how-seed><b style="color:#00f1ff">LowG</b> <span dir="ltr">youtu.be/xK2…</span></p>
+                  <p class="how-msg"><b style="color:#ff6b9a">Mahsa</b> next pls</p>
+                </div>
+              </div>
+              <div class="how-arrow" data-how-arrow aria-hidden="true"></div>
+              <div class="how-col how-queue" data-how-col>
+                <p class="how-col-head"><span class="tally"></span>Queue</p>
+                <ol class="how-queue-list" data-how-queue>
+                  <li class="how-q-item" data-how-slot>
+                    <span class="how-q-thumb youtube"></span>
+                    <span class="how-q-meta"><b>Funniest fail</b><small>YouTube</small></span>
+                  </li>
+                  <li class="how-q-item" data-how-slot>
+                    <span class="how-q-thumb twitch"></span>
+                    <span class="how-q-meta"><b>Chat goes wild</b><small>Twitch</small></span>
+                  </li>
+                  <li class="how-q-item how-q-empty" data-how-slot-empty>waiting for links…</li>
+                </ol>
+              </div>
+              <div class="how-arrow" data-how-arrow aria-hidden="true"></div>
+              <div class="how-col how-play" data-how-col>
+                <p class="how-col-head"><span class="tally"></span>Stream</p>
+                <div class="how-player" data-how-player>
+                  <div class="how-screen kick">
+                    <span class="how-play-btn"></span>
+                    <span class="how-progress" data-how-progress></span>
+                  </div>
+                  <p class="how-now-title" data-how-title>Insane clutch</p>
+                  <p class="how-now-meta" data-how-meta>Kick · Radin · 0:41</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <ol class="steps" data-stagger>
             <li>
               <h3>Log in with Kick</h3>
               <p>Use your Kick account. clipQ finds your channel and connects to its chat.</p>
             </li>
             <li>
               <h3>Open the queue</h3>
-              <p>Flip the switch, or have a mod type <code>!cq open</code>. Now viewers can post links in chat.</p>
+              <p>Flip the switch, or have a mod type <code>!cq open</code>. Viewers can post links.</p>
             </li>
             <li>
               <h3>Watch on stream</h3>
-              <p>Clips line up in order. Press Next, or let them play one after another automatically.</p>
+              <p>Clips line up in order. Press Next, or let them play one after another.</p>
             </li>
           </ol>
         </div>
       </section>
 
-      <section id="features">
-        <div class="wrap">
-          <div class="section-head">
-            <h2>Built for live chat</h2>
-            <p>Chat is fast and messy. clipQ keeps the queue fair and the stream safe.</p>
+      <section id="built">
+        <div class="wrap feature-split reverse">
+          <div class="feature-copy">
+            <div class="section-head" data-reveal>
+              <h2>Built for live chat</h2>
+              <p>Chat is fast and messy. The queue stays fair, and mods stay in control.</p>
+            </div>
+            <dl class="points" data-stagger>
+              <div>
+                <dt>Fair order</dt>
+                <dd>Clips play in the order they were posted, even when some links take longer to load.</dd>
+              </div>
+              <div>
+                <dt>Spam limits</dt>
+                <dd>Each viewer can only have a few clips waiting, the same clip can't be added twice, and you choose who can post each platform.</dd>
+              </div>
+              <div>
+                <dt>Mods in control</dt>
+                <dd>Ban or time out a viewer and their links are ignored. Deleted messages and Kick bans remove clips right away.</dd>
+              </div>
+              <div>
+                <dt>Always listening</dt>
+                <dd>clipQ reads chat on its server, so links are collected even if the dashboard isn't open. Kick, YouTube and TikTok advance automatically when they end.</dd>
+              </div>
+            </dl>
           </div>
-          <div class="features">
-            <article>
-              <h3>Fair order</h3>
-              <p>Clips play in the order they were posted, even when some links take longer to load.</p>
-            </article>
-            <article>
-              <h3>Spam limits</h3>
-              <p>Each viewer can only have a few clips waiting, the same clip can't be added twice, and you choose who can post each platform: subs, OGs, VIPs or mods.</p>
-            </article>
-            <article>
-              <h3>Mods stay in control</h3>
-              <p>Ban or time out a viewer in clipQ and their links are ignored. Deleted messages and Kick bans remove clips right away.</p>
-            </article>
-            <article>
-              <h3>Plays by itself</h3>
-              <p>Kick, YouTube and TikTok clips go to the next one automatically when they end.</p>
-            </article>
-            <article>
-              <h3>Always listening</h3>
-              <p>clipQ reads your chat on its server, so links are collected even if the dashboard isn't open.</p>
-            </article>
-            <article>
-              <h3>Free</h3>
-              <p>No plans, no limits on channels. Kept running by donations.</p>
-            </article>
+          <div class="feature-art" data-art aria-hidden="true">
+            <div class="art-stack">
+              <div class="art-card art-card-mod">
+                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="#e1182f" d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3zm0 4.2L7 7.8v3.3c0 3.3 2.1 6.3 5 7.5 2.9-1.2 5-4.2 5-7.5V7.8L12 6.2z"/></svg>
+                <span>Mods keep it clean</span>
+              </div>
+              <div class="art-card">
+                <span class="art-thumb youtube"></span>
+                <span><b>Funniest fail</b><small>YouTube · LowGraphic</small></span>
+              </div>
+              <div class="art-card">
+                <span class="art-thumb twitch"></span>
+                <span><b>Chat goes wild</b><small>Twitch · Amir_1446</small></span>
+              </div>
+              <div class="art-card">
+                <span class="art-thumb kick"></span>
+                <span><b>Final round clutch</b><small>Kick · Radin_SD</small></span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       <section id="sources">
         <div class="wrap">
-          <div class="section-head">
+          <div class="section-head" data-reveal>
             <h2>Every clip your chat posts</h2>
             <p>Viewers paste links the way they always do, with or without <code>https://</code>.</p>
           </div>
-          <ul class="sources">
-            <li>Kick clips</li>
-            <li>YouTube &amp; Shorts</li>
-            <li>Twitch clips</li>
-            <li>TikTok</li>
-            <li>Instagram Reels</li>
-            <li>X (Twitter)</li>
-            <li>Streamable</li>
+          <!-- Brand marks: Simple Icons (CC0) https://simpleicons.org — Streamable from site favicon -->
+          <ul class="platform-grid" aria-label="Supported platforms">
+            <li class="platform-mark">
+              <span class="platform-icon"><img src="/landing/brands/kick.svg" alt="" width="48" height="48" /></span>
+              <span>Kick</span>
+            </li>
+            <li class="platform-mark">
+              <span class="platform-icon"><img src="/landing/brands/youtube.svg" alt="" width="48" height="48" /></span>
+              <span>YouTube</span>
+            </li>
+            <li class="platform-mark">
+              <span class="platform-icon"><img src="/landing/brands/twitch.svg" alt="" width="48" height="48" /></span>
+              <span>Twitch</span>
+            </li>
+            <li class="platform-mark">
+              <span class="platform-icon"><img src="/landing/brands/tiktok.svg" alt="" width="48" height="48" /></span>
+              <span>TikTok</span>
+            </li>
+            <li class="platform-mark">
+              <span class="platform-icon"><img src="/landing/brands/instagram.svg" alt="" width="48" height="48" /></span>
+              <span>Instagram</span>
+            </li>
+            <li class="platform-mark">
+              <span class="platform-icon"><img src="/landing/brands/x.svg" alt="" width="48" height="48" /></span>
+              <span>X</span>
+            </li>
+            <li class="platform-mark">
+              <span class="platform-icon"><img src="/landing/brands/streamable.png" alt="" width="48" height="48" /></span>
+              <span>Streamable</span>
+            </li>
           </ul>
         </div>
       </section>
 
       <section id="commands">
-        <div class="wrap">
-          <div class="section-head">
-            <h2>Chat commands for you and your mods</h2>
-            <p>Run the queue without leaving chat.</p>
+        <div class="wrap feature-split">
+          <div class="feature-copy">
+            <div class="section-head" data-reveal>
+              <h2>Chat commands</h2>
+              <p>Run the queue without leaving chat.</p>
+            </div>
+            <dl class="commands" data-reveal>
+              <dt><code>!cq open</code></dt>
+              <dd>Start taking clips from chat</dd>
+              <dt><code>!cq close</code></dt>
+              <dd>Stop taking clips</dd>
+              <dt><code>!cq next</code></dt>
+              <dd>Play the next clip</dd>
+              <dt><code>!cq skip</code></dt>
+              <dd>Skip the current clip</dd>
+              <dt><code>!cq prev</code></dt>
+              <dd>Replay the previous clip</dd>
+              <dt><code>!cq clear</code></dt>
+              <dd>Empty the queue</dd>
+              <dt><code>!cq timeout name 10m</code></dt>
+              <dd>Ignore someone's links for a while</dd>
+              <dt><code>!cq ban name</code></dt>
+              <dd>Ignore someone's links until unbanned (<code>!cq unban name</code>)</dd>
+            </dl>
           </div>
-          <dl class="commands">
-            <dt><code>!cq open</code></dt>
-            <dd>Start taking clips from chat</dd>
-            <dt><code>!cq close</code></dt>
-            <dd>Stop taking clips</dd>
-            <dt><code>!cq next</code></dt>
-            <dd>Play the next clip</dd>
-            <dt><code>!cq skip</code></dt>
-            <dd>Skip the current clip</dd>
-            <dt><code>!cq prev</code></dt>
-            <dd>Replay the previous clip</dd>
-            <dt><code>!cq clear</code></dt>
-            <dd>Empty the queue</dd>
-            <dt><code>!cq timeout name 10m</code></dt>
-            <dd>Ignore someone's links for a while</dd>
-            <dt><code>!cq ban name</code></dt>
-            <dd>Ignore someone's links until unbanned (<code>!cq unban name</code>)</dd>
-          </dl>
+          <div class="feature-art" data-art aria-hidden="true">
+            <div class="art-terminal">
+              <div class="art-terminal-bar"><span></span><span></span><span></span></div>
+              <p class="art-cmd-muted"># mod chat</p>
+              <p class="art-cmd-line"><span class="art-prompt">›</span> !cq open</p>
+              <p class="art-cmd-ok">queue open — listening</p>
+              <p class="art-cmd-line"><span class="art-prompt">›</span> !cq next</p>
+              <p class="art-cmd-ok">playing · Kick clip</p>
+            </div>
+          </div>
         </div>
       </section>
 
       <section id="faq">
-        <div class="wrap">
-          <div class="section-head">
+        <div class="wrap faq-wrap">
+          <div class="section-head" data-reveal>
             <h2>Questions</h2>
           </div>
-          <div class="faq">
+          <div class="faq" data-stagger>
             <details>
               <summary>Is clipQ free?</summary>
-              <p>Yes. clipQ is free to use. Donations help pay for hosting.</p>
+              <div class="faq-a"><p>Yes. clipQ is free to use. Donations help pay for hosting.</p></div>
             </details>
             <details>
               <summary>Which links does clipQ accept?</summary>
-              <p>Kick clips, YouTube videos and Shorts, Twitch clips, TikTok, Instagram Reels and posts, X (Twitter) posts and Streamable.</p>
+              <div class="faq-a"><p>Kick clips, YouTube videos and Shorts, Twitch clips, TikTok, Instagram Reels and posts, X (Twitter) posts and Streamable.</p></div>
             </details>
             <details>
               <summary>Does the dashboard have to stay open to collect clips?</summary>
-              <p>
-                No. clipQ reads your Kick chat on its server, so links are collected while the queue is open even if the dashboard
-                tab is closed.
-              </p>
+              <div class="faq-a">
+                <p>
+                  No. clipQ reads your Kick chat on its server, so links are collected while the queue is open even if the dashboard
+                  tab is closed.
+                </p>
+              </div>
             </details>
             <details>
               <summary>How does clipQ stop spam?</summary>
-              <p>
-                Each viewer can only have a few clips waiting, the same clip can't be in the queue twice, and clips are removed when a moderator deletes the message or bans the viewer.
-              </p>
+              <div class="faq-a">
+                <p>
+                  Each viewer can only have a few clips waiting, the same clip can't be in the queue twice, and clips are removed when a moderator deletes the message or bans the viewer.
+                </p>
+              </div>
             </details>
             <details>
               <summary>Is it safe to log in with Kick?</summary>
-              <p>
-                Yes. clipQ uses Kick's official login and only asks to read your profile and channel. It never sees your password
-                and can't post or change anything on your account.
-              </p>
+              <div class="faq-a">
+                <p>
+                  Yes. clipQ uses Kick's official login and only asks to read your profile and channel. It never sees your password
+                  and can't post or change anything on your account.
+                </p>
+              </div>
             </details>
           </div>
         </div>
       </section>
 
-      <section class="final">
+      <section class="final" data-reveal>
         <div class="wrap">
-          <h2>Let your chat run the clips tonight</h2>
-          <p>Log in with Kick and open the queue. It takes about a minute.</p>
+          <h2>Open the queue and let chat run clips.</h2>
+          <p>Log in with Kick. It takes about a minute.</p>
           <div class="cta-row">
-            <a class="btn btn-primary btn-lg" href="/app/">Start with clipQ</a>
+            <a class="rich-btn rich-btn-red rich-btn-lg" href="/app/">Start with clipQ</a>
           </div>
         </div>
       </section>
     </main>
 
     <footer class="site-footer">
-      <div class="wrap">
+      <!-- Spell UI Animated Gradient — Lava preset (https://spell.sh/docs/animated-gradient) -->
+      <div id="footer-lava" class="footer-lava" aria-hidden="true"></div>
+      <div class="wrap site-footer-inner">
         <a class="logo" href="/"><span class="tally" aria-hidden="true"></span>clipQ</a>
         <nav aria-label="Footer">
-          <a class="donate" href="https://nowpayments.io/donation/sina" target="_blank" rel="noopener">♥ Support clipQ (donate)</a>
-          <a href="https://github.com/sinafayazi/clipQ" target="_blank" rel="noopener">Source code</a>
+          <a href="https://nowpayments.io/donation/sina" target="_blank" rel="noopener">Donate</a>
+          <a href="https://github.com/sinafayazi/clipQ" target="_blank" rel="noopener">Source</a>
           <a href="/fa/" hreflang="fa" lang="fa">فارسی</a>
         </nav>
       </div>

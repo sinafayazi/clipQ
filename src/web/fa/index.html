@@ -39,6 +39,9 @@
     />
     <link rel="stylesheet" href="../landing.css" />
     <script type="module" src="../landing-demo.ts"></script>
+    <script type="module" src="../landing-motion.ts"></script>
+    <script type="module" src="../landing-platforms.ts"></script>
+    <script type="module" src="../landing-lava.ts"></script>
 
     <script type="application/ld+json">
       {
@@ -93,35 +96,25 @@
     <header class="site-header">
       <div class="wrap">
         <a class="logo" href="/fa/" lang="en"><span class="tally" aria-hidden="true"></span>clipQ</a>
-        <nav class="nav" aria-label="بخش‌ها">
-          <a href="#how">چطور کار می‌کنه</a>
-          <a href="#features">امکانات</a>
-          <a href="#faq">سؤال‌ها</a>
-        </nav>
-        <a class="lang" href="/" hreflang="en" lang="en">English</a>
-        <a class="btn" href="/app/">ورود به داشبورد</a>
+        <a class="header-login" href="/app/">ورود</a>
       </div>
     </header>
 
     <main id="main">
-      <div class="hero">
-        <div class="wrap">
-          <div>
-            <p class="eyebrow"><span class="tally" aria-hidden="true"></span>برای استریمرهای کیک</p>
-            <h1>چت کلیپ رو انتخاب می‌کنه، <em>تو فقط پلی بزن.</em></h1>
-            <p class="lede">
-              clipQ لینک‌های کلیپی که بیننده‌ها توی چت کیک می‌فرستن رو به یه صف مرتب تبدیل می‌کنه. روی استریم یکی‌یکی نگاهشون کن،
-              بدها رو رد کن، و بذار مدها صف رو تمیز نگه دارن.
-            </p>
-            <div class="cta-row">
-              <a class="btn btn-primary btn-lg" href="/app/">ورود با کیک، رایگان</a>
-              <a class="btn btn-lg" href="#how">ببین چطور کار می‌کنه</a>
-            </div>
-            <p class="fineprint">نه چیزی نصب می‌کنی، نه رباتی اضافه می‌کنی. یه بار وارد شو و clipQ چتت رو گوش می‌ده.</p>
+      <section class="hero">
+        <div class="wrap hero-copy">
+          <h1>چت کلیپ رو انتخاب می‌کنه، تو فقط پلی بزن.</h1>
+          <p class="lede">
+            بیننده‌ها لینک کیک، یوتیوب، توییچ، تیک‌تاک و بقیه رو توی چت می‌ذارن. clipQ صفشون می‌کنه تا روی استریم به ترتیب نگاهشون کنی.
+          </p>
+          <div class="cta-row">
+            <a class="rich-btn rich-btn-red rich-btn-lg" href="/app/">ورود با کیک</a>
+            <a class="rich-btn rich-btn-zinc rich-btn-lg" href="#how">چطور کار می‌کنه</a>
           </div>
+        </div>
 
+        <div class="wrap">
           <figure class="demo" aria-label="نمونه: لینک‌هایی که توی چت کیک فرستاده می‌شن توی صف clipQ میان">
-            <span class="demo-badge">نمونه</span>
             <div class="demo-panels" aria-hidden="true">
               <div class="demo-chat">
                 <p class="demo-head"><span class="kick-dot"></span>چت کیک</p>
@@ -150,165 +143,260 @@
                 </ol>
               </div>
             </div>
-            <figcaption>بیننده‌ها لینک رو توی چت می‌فرستن. هر کدوم به ترتیب میاد توی صف تو.</figcaption>
+            <figcaption>لینک‌های چت می‌شن صف، به همون ترتیبی که رسیدن.</figcaption>
           </figure>
         </div>
-      </div>
+      </section>
 
       <section id="how">
-        <div class="wrap">
-          <div class="section-head">
+        <div class="wrap how-layout">
+          <div class="section-head" data-reveal>
             <h2>چطور کار می‌کنه</h2>
-            <p>یه بار، توی حدود یه دقیقه راهش بنداز. از اون به بعد خودش کار می‌کنه.</p>
+            <p>حدود یه دقیقه راهش بنداز. از اون به بعد خودش کار می‌کنه.</p>
           </div>
-          <ol class="steps">
+          <div class="feature-art" data-art aria-hidden="true">
+            <div class="how-scene" data-how-scene>
+              <div class="how-col how-chat" data-how-col>
+                <p class="how-col-head"><span class="kick-dot"></span>چت</p>
+                <div class="how-chat-feed" data-how-feed>
+                  <p class="how-msg"><b style="color:#ffa600">Radin</b> استریم عالیه</p>
+                  <p class="how-msg how-msg-link" data-how-seed><b style="color:#00f1ff">LowG</b> <span dir="ltr">youtu.be/xK2…</span></p>
+                  <p class="how-msg"><b style="color:#ff6b9a">Mahsa</b> بعدی مال من</p>
+                </div>
+              </div>
+              <div class="how-arrow" data-how-arrow aria-hidden="true"></div>
+              <div class="how-col how-queue" data-how-col>
+                <p class="how-col-head"><span class="tally"></span>صف</p>
+                <ol class="how-queue-list" data-how-queue>
+                  <li class="how-q-item" data-how-slot>
+                    <span class="how-q-thumb youtube"></span>
+                    <span class="how-q-meta"><b>خنده‌دارترین سوتی</b><small>یوتیوب</small></span>
+                  </li>
+                  <li class="how-q-item" data-how-slot>
+                    <span class="how-q-thumb twitch"></span>
+                    <span class="how-q-meta"><b>چت منفجر شد</b><small>توییچ</small></span>
+                  </li>
+                  <li class="how-q-item how-q-empty" data-how-slot-empty>در انتظار لینک…</li>
+                </ol>
+              </div>
+              <div class="how-arrow" data-how-arrow aria-hidden="true"></div>
+              <div class="how-col how-play" data-how-col>
+                <p class="how-col-head"><span class="tally"></span>استریم</p>
+                <div class="how-player" data-how-player>
+                  <div class="how-screen kick">
+                    <span class="how-play-btn"></span>
+                    <span class="how-progress" data-how-progress></span>
+                  </div>
+                  <p class="how-now-title" data-how-title>کلاچ دیوونه‌وار</p>
+                  <p class="how-now-meta" data-how-meta>کیک · Radin · ۰:۴۱</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <ol class="steps" data-stagger>
             <li>
               <h3>با کیک وارد شو</h3>
               <p>با اکانت کیک خودت وارد شو. clipQ کانالت رو پیدا می‌کنه و به چتش وصل می‌شه.</p>
             </li>
             <li>
               <h3>صف رو باز کن</h3>
-              <p>سوییچ رو روشن کن، یا یکی از مدها بنویسه <code dir="ltr">!cq open</code>. حالا بیننده‌ها می‌تونن لینک بفرستن.</p>
+              <p>سوییچ رو روشن کن، یا مد بنویسه <code dir="ltr">!cq open</code>. حالا بیننده‌ها می‌تونن لینک بفرستن.</p>
             </li>
             <li>
               <h3>روی استریم ببین</h3>
-              <p>کلیپ‌ها به ترتیب توی صف قرار می‌گیرن. دکمه‌ی بعدی رو بزن، یا بذار خودکار پشت هم پخش بشن.</p>
+              <p>کلیپ‌ها به ترتیب میان. دکمه‌ی بعدی رو بزن، یا بذار خودکار پشت هم پخش بشن.</p>
             </li>
           </ol>
         </div>
       </section>
 
-      <section id="features">
-        <div class="wrap">
-          <div class="section-head">
-            <h2>ساخته‌شده برای چت زنده</h2>
-            <p>چت سریع و شلوغه. clipQ صف رو عادلانه و استریم رو امن نگه می‌داره.</p>
+      <section id="built">
+        <div class="wrap feature-split">
+          <div class="feature-copy">
+            <div class="section-head" data-reveal>
+              <h2>ساخته‌شده برای چت زنده</h2>
+              <p>چت سریع و شلوغه. صف عادلانه می‌مونه و کنترل دست مدهاست.</p>
+            </div>
+            <dl class="points" data-stagger>
+              <div>
+                <dt>ترتیب عادلانه</dt>
+                <dd>کلیپ‌ها به همون ترتیبی که فرستاده شدن پخش می‌شن، حتی اگه بعضی لینک‌ها دیرتر لود بشن.</dd>
+              </div>
+              <div>
+                <dt>محدودیت اسپم</dt>
+                <dd>هر بیننده فقط چند کلیپ می‌تونه توی صف داشته باشه، یه کلیپ دو بار اضافه نمی‌شه، و برای هر پلتفرم انتخاب می‌کنی کی بتونه لینک بده.</dd>
+              </div>
+              <div>
+                <dt>کنترل دست مدهاست</dt>
+                <dd>کسی رو بن یا تایم‌اوت کن تا لینک‌هاش نادیده گرفته بشن. پیام پاک‌شده و بن کیک هم کلیپ‌ها رو همون لحظه حذف می‌کنه.</dd>
+              </div>
+              <div>
+                <dt>همیشه گوش به زنگ</dt>
+                <dd>clipQ چت رو روی سرور می‌خونه، پس حتی وقتی داشبورد باز نیست لینک‌ها جمع می‌شن. کیک، یوتیوب و تیک‌تاک وقتی تموم بشن خودکار می‌رن بعدی.</dd>
+              </div>
+            </dl>
           </div>
-          <div class="features">
-            <article>
-              <h3>ترتیب عادلانه</h3>
-              <p>کلیپ‌ها به همون ترتیبی که توی چت فرستاده شدن پخش می‌شن، حتی اگه بعضی لینک‌ها دیرتر لود بشن.</p>
-            </article>
-            <article>
-              <h3>محدودیت اسپم</h3>
-              <p>هر بیننده فقط چند کلیپ می‌تونه توی صف داشته باشه، یه کلیپ دو بار اضافه نمی‌شه، و برای هر پلتفرم انتخاب می‌کنی کی بتونه لینک بده: ساب‌ها، OGها، VIPها یا مدها.</p>
-            </article>
-            <article>
-              <h3>کنترل دست مدهاست</h3>
-              <p>کسی رو توی clipQ بن یا تایم‌اوت کن تا لینک‌هاش نادیده گرفته بشن. پیام پاک‌شده و بن کیک هم کلیپ‌ها رو همون لحظه حذف می‌کنه.</p>
-            </article>
-            <article>
-              <h3>پخش خودکار</h3>
-              <p>کلیپ‌های کیک، یوتیوب و تیک‌تاک وقتی تموم بشن، خودکار میره سراغ بعدی.</p>
-            </article>
-            <article>
-              <h3>همیشه گوش به زنگ</h3>
-              <p>clipQ چتت رو روی سرور خودش می‌خونه، پس حتی وقتی داشبورد باز نیست هم لینک‌ها جمع می‌شن.</p>
-            </article>
-            <article>
-              <h3>رایگان</h3>
-              <p>بدون پلن و بدون محدودیت تعداد کانال. با دونیت سرپا می‌مونه.</p>
-            </article>
+          <div class="feature-art" data-art aria-hidden="true">
+            <div class="art-stack">
+              <div class="art-card art-card-mod">
+                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="#e1182f" d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3zm0 4.2L7 7.8v3.3c0 3.3 2.1 6.3 5 7.5 2.9-1.2 5-4.2 5-7.5V7.8L12 6.2z"/></svg>
+                <span>مدها صف رو تمیز نگه می‌دارن</span>
+              </div>
+              <div class="art-card">
+                <span class="art-thumb youtube"></span>
+                <span><b>خنده‌دارترین سوتی</b><small>یوتیوب · LowGraphic</small></span>
+              </div>
+              <div class="art-card">
+                <span class="art-thumb twitch"></span>
+                <span><b>چت منفجر شد</b><small>توییچ · Amir_1446</small></span>
+              </div>
+              <div class="art-card">
+                <span class="art-thumb kick"></span>
+                <span><b>کلاچ راند آخر</b><small>کیک · Radin_SD</small></span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       <section id="sources">
         <div class="wrap">
-          <div class="section-head">
+          <div class="section-head" data-reveal>
             <h2>هر کلیپی که چت بفرسته</h2>
-            <p>بیننده‌ها همون‌طوری که همیشه لینک می‌ذارن، با <code dir="ltr">https://</code> یا بدونش، بفرستن.</p>
+            <p>بیننده‌ها همون‌طوری که همیشه لینک می‌ذارن، با <code dir="ltr">https://</code> یا بدونش.</p>
           </div>
-          <ul class="sources">
-            <li>کلیپ کیک</li>
-            <li>یوتیوب و شورتس</li>
-            <li>کلیپ توییچ</li>
-            <li>تیک‌تاک</li>
-            <li>ریلز اینستاگرام</li>
-            <li>X (توییتر)</li>
-            <li lang="en">Streamable</li>
+          <!-- Brand marks: Simple Icons (CC0) https://simpleicons.org — Streamable from site favicon -->
+          <ul class="platform-grid" aria-label="پلتفرم‌های پشتیبانی‌شده">
+            <li class="platform-mark">
+              <span class="platform-icon"><img src="/landing/brands/kick.svg" alt="" width="48" height="48" /></span>
+              <span>کیک</span>
+            </li>
+            <li class="platform-mark">
+              <span class="platform-icon"><img src="/landing/brands/youtube.svg" alt="" width="48" height="48" /></span>
+              <span>یوتیوب</span>
+            </li>
+            <li class="platform-mark">
+              <span class="platform-icon"><img src="/landing/brands/twitch.svg" alt="" width="48" height="48" /></span>
+              <span>توییچ</span>
+            </li>
+            <li class="platform-mark">
+              <span class="platform-icon"><img src="/landing/brands/tiktok.svg" alt="" width="48" height="48" /></span>
+              <span>تیک‌تاک</span>
+            </li>
+            <li class="platform-mark">
+              <span class="platform-icon"><img src="/landing/brands/instagram.svg" alt="" width="48" height="48" /></span>
+              <span>اینستاگرام</span>
+            </li>
+            <li class="platform-mark">
+              <span class="platform-icon"><img src="/landing/brands/x.svg" alt="" width="48" height="48" /></span>
+              <span>X</span>
+            </li>
+            <li class="platform-mark">
+              <span class="platform-icon"><img src="/landing/brands/streamable.png" alt="" width="48" height="48" /></span>
+              <span lang="en">Streamable</span>
+            </li>
           </ul>
         </div>
       </section>
 
       <section id="commands">
-        <div class="wrap">
-          <div class="section-head">
-            <h2>دستورهای چت برای خودت و مدها</h2>
-            <p>صف رو بدون اینکه از چت بیرون بیای مدیریت کن.</p>
+        <div class="wrap feature-split">
+          <div class="feature-copy">
+            <div class="section-head" data-reveal>
+              <h2>دستورهای چت</h2>
+              <p>صف رو بدون اینکه از چت بیرون بیای مدیریت کن.</p>
+            </div>
+            <dl class="commands" data-reveal>
+              <dt><code dir="ltr">!cq open</code></dt>
+              <dd>شروع قبول کلیپ از چت</dd>
+              <dt><code dir="ltr">!cq close</code></dt>
+              <dd>توقف قبول کلیپ</dd>
+              <dt><code dir="ltr">!cq next</code></dt>
+              <dd>پخش کلیپ بعدی</dd>
+              <dt><code dir="ltr">!cq skip</code></dt>
+              <dd>رد کردن کلیپ فعلی</dd>
+              <dt><code dir="ltr">!cq prev</code></dt>
+              <dd>پخش دوباره‌ی کلیپ قبلی</dd>
+              <dt><code dir="ltr">!cq clear</code></dt>
+              <dd>خالی کردن صف</dd>
+              <dt><code dir="ltr">!cq timeout name 10m</code></dt>
+              <dd>نادیده گرفتن لینک‌های یه نفر برای مدتی</dd>
+              <dt><code dir="ltr">!cq ban name</code></dt>
+              <dd>نادیده گرفتن لینک‌های یه نفر تا وقتی آنبن بشه (<code dir="ltr">!cq unban name</code>)</dd>
+            </dl>
           </div>
-          <dl class="commands">
-            <dt><code dir="ltr">!cq open</code></dt>
-            <dd>شروع قبول کلیپ از چت</dd>
-            <dt><code dir="ltr">!cq close</code></dt>
-            <dd>توقف قبول کلیپ</dd>
-            <dt><code dir="ltr">!cq next</code></dt>
-            <dd>پخش کلیپ بعدی</dd>
-            <dt><code dir="ltr">!cq skip</code></dt>
-            <dd>رد کردن کلیپ فعلی</dd>
-            <dt><code dir="ltr">!cq prev</code></dt>
-            <dd>پخش دوباره‌ی کلیپ قبلی</dd>
-            <dt><code dir="ltr">!cq clear</code></dt>
-            <dd>خالی کردن صف</dd>
-            <dt><code dir="ltr">!cq timeout name 10m</code></dt>
-            <dd>نادیده گرفتن لینک‌های یه نفر برای مدتی</dd>
-            <dt><code dir="ltr">!cq ban name</code></dt>
-            <dd>نادیده گرفتن لینک‌های یه نفر تا وقتی آنبن بشه (<code dir="ltr">!cq unban name</code>)</dd>
-          </dl>
+          <div class="feature-art" data-art aria-hidden="true">
+            <div class="art-terminal">
+              <div class="art-terminal-bar"><span></span><span></span><span></span></div>
+              <p class="art-cmd-muted"># چت مد</p>
+              <p class="art-cmd-line" dir="ltr"><span class="art-prompt">›</span> !cq open</p>
+              <p class="art-cmd-ok">صف باز شد — در حال گوش دادن</p>
+              <p class="art-cmd-line" dir="ltr"><span class="art-prompt">›</span> !cq next</p>
+              <p class="art-cmd-ok">در حال پخش · کلیپ کیک</p>
+            </div>
+          </div>
         </div>
       </section>
 
       <section id="faq">
-        <div class="wrap">
-          <div class="section-head">
+        <div class="wrap faq-wrap">
+          <div class="section-head" data-reveal>
             <h2>سؤال‌های رایج</h2>
           </div>
-          <div class="faq">
+          <div class="faq" data-stagger>
             <details>
               <summary>clipQ رایگانه؟</summary>
-              <p>بله، استفاده از clipQ رایگانه. دونیت‌ها هزینه‌ی سرور رو پوشش می‌دن.</p>
+              <div class="faq-a"><p>بله، استفاده از clipQ رایگانه. دونیت‌ها هزینه‌ی سرور رو پوشش می‌دن.</p></div>
             </details>
             <details>
               <summary>چه لینک‌هایی قبول می‌شه؟</summary>
-              <p>کلیپ کیک، ویدیو و شورتس یوتیوب، کلیپ توییچ، تیک‌تاک، ریلز و پست اینستاگرام، پست‌های X (توییتر) و Streamable.</p>
+              <div class="faq-a"><p>کلیپ کیک، ویدیو و شورتس یوتیوب، کلیپ توییچ، تیک‌تاک، ریلز و پست اینستاگرام، پست‌های X (توییتر) و Streamable.</p></div>
             </details>
             <details>
               <summary>باید صفحه‌ی داشبورد باز بمونه تا کلیپ‌ها جمع بشن؟</summary>
-              <p>نه. clipQ چت کیک تو رو روی سرور خودش می‌خونه، پس تا وقتی صف بازه لینک‌ها جمع می‌شن، حتی اگه تب داشبورد بسته باشه.</p>
+              <div class="faq-a">
+                <p>نه. clipQ چت کیک تو رو روی سرور خودش می‌خونه، پس تا وقتی صف بازه لینک‌ها جمع می‌شن، حتی اگه تب داشبورد بسته باشه.</p>
+              </div>
             </details>
             <details>
               <summary>جلوی اسپم چطور گرفته می‌شه؟</summary>
-              <p>
-                هر بیننده فقط چند کلیپ می‌تونه توی صف داشته باشه، یه کلیپ دو بار توی صف نمیاد، و اگه مد پیامی رو پاک کنه یا کسی رو بن کنه، کلیپ‌هاش از صف حذف می‌شن.
-              </p>
+              <div class="faq-a">
+                <p>
+                  هر بیننده فقط چند کلیپ می‌تونه توی صف داشته باشه، یه کلیپ دو بار توی صف نمیاد، و اگه مد پیامی رو پاک کنه یا کسی رو بن کنه، کلیپ‌هاش از صف حذف می‌شن.
+                </p>
+              </div>
             </details>
             <details>
               <summary>ورود با اکانت کیک امنه؟</summary>
-              <p>
-                بله. clipQ از ورود رسمی کیک استفاده می‌کنه و فقط اجازه‌ی خوندن پروفایل و کانالت رو می‌گیره. رمزت رو هیچ‌وقت نمی‌بینه
-                و نمی‌تونه چیزی توی اکانتت پست یا عوض کنه.
-              </p>
+              <div class="faq-a">
+                <p>
+                  بله. clipQ از ورود رسمی کیک استفاده می‌کنه و فقط اجازه‌ی خوندن پروفایل و کانالت رو می‌گیره. رمزت رو هیچ‌وقت نمی‌بینه
+                  و نمی‌تونه چیزی توی اکانتت پست یا عوض کنه.
+                </p>
+              </div>
             </details>
           </div>
         </div>
       </section>
 
-      <section class="final">
+      <section class="final" data-reveal>
         <div class="wrap">
-          <h2>امشب بذار چت کلیپ‌ها رو بچرخونه</h2>
-          <p>با کیک وارد شو و صف رو باز کن. حدود یه دقیقه طول می‌کشه.</p>
+          <h2>صف رو باز کن و بذار چت کلیپ بچرخونه.</h2>
+          <p>با کیک وارد شو. حدود یه دقیقه طول می‌کشه.</p>
           <div class="cta-row">
-            <a class="btn btn-primary btn-lg" href="/app/">شروع با clipQ</a>
+            <a class="rich-btn rich-btn-red rich-btn-lg" href="/app/">شروع با clipQ</a>
           </div>
         </div>
       </section>
     </main>
 
     <footer class="site-footer">
-      <div class="wrap">
+      <!-- Spell UI Animated Gradient — Lava preset (https://spell.sh/docs/animated-gradient) -->
+      <div id="footer-lava" class="footer-lava" aria-hidden="true"></div>
+      <div class="wrap site-footer-inner">
         <a class="logo" href="/fa/" lang="en"><span class="tally" aria-hidden="true"></span>clipQ</a>
         <nav aria-label="پانویس">
-          <a class="donate" href="https://nowpayments.io/donation/sina" target="_blank" rel="noopener">♥ حمایت از clipQ (دونیت)</a>
+          <a href="https://nowpayments.io/donation/sina" target="_blank" rel="noopener">دونیت</a>
           <a href="https://github.com/sinafayazi/clipQ" target="_blank" rel="noopener">کد منبع</a>
           <a href="/" hreflang="en" lang="en">English</a>
         </nav>
