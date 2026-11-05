@@ -223,8 +223,15 @@ code {
   min-height: 3.75rem;
 }
 
-.header-login {
+.header-actions {
   margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 1.15rem;
+}
+
+.header-link,
+.header-login {
   padding: 0.35rem 0.15rem;
   min-height: 2.5rem;
   display: inline-flex;
@@ -241,16 +248,23 @@ code {
   transition: color 140ms var(--ease);
 }
 
+.site-header.is-scrolled .header-link,
 .site-header.is-scrolled .header-login {
   color: var(--text-2);
 }
 
+.header-link[aria-current="page"] {
+  color: var(--text);
+}
+
 @media (hover: hover) {
+  .header-link:hover,
   .header-login:hover {
     color: var(--text);
   }
 }
 
+.header-link:active,
 .header-login:active {
   transform: scale(0.96);
 }

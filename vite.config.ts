@@ -29,6 +29,7 @@ export default defineConfig({
       input: {
         landing: resolve(here, "src/web/index.html"),
         landingFa: resolve(here, "src/web/fa/index.html"),
+        help: resolve(here, "src/web/help/index.html"),
         app: resolve(here, "src/web/app/index.html"),
         songs: resolve(here, "src/web/s/index.html"),
         obs: resolve(here, "src/web/obs/index.html"),
@@ -39,7 +40,7 @@ export default defineConfig({
     },
   },
   server: {
-    host: "127.0.0.1",
+    host: "localhost",
     port: 5173,
     proxy: {
       // Trailing slashes matter: "/api" would also catch the web module "/api.ts".

@@ -26,6 +26,7 @@ export async function registerSite(app: FastifyInstance, webRoot: string, sessio
     verify ? html.replace("</head>", `  <meta name="google-site-verification" content="${escapeAttr(verify)}" />\n  </head>`) : html;
   const landingEn = withVerification(page("index.html"));
   const landingFa = withVerification(page("fa/index.html"));
+  const helpPage = withVerification(page("help/index.html"));
   const dashboard = page("app/index.html");
   const songPage = page("s/index.html");
   const obsPage = page("obs/index.html");
@@ -53,6 +54,8 @@ export async function registerSite(app: FastifyInstance, webRoot: string, sessio
   app.get("/", (req, reply) => (sessions.channelId(req) !== null ? reply.redirect("/app/") : html(landingEn)(req, reply)));
   app.get("/fa/", html(landingFa));
   app.get("/fa", (_req, reply) => reply.redirect("/fa/", 301));
+  app.get("/help", (_req, reply) => reply.redirect("/help/", 301));
+  app.get("/help/", html(helpPage));
   app.get("/app", (_req, reply) => reply.redirect("/app/", 301));
   app.get("/app/", html(dashboard));
   // One page for every channel's song list; it reads the channel from the URL.
@@ -93,6 +96,9 @@ export async function registerSite(app: FastifyInstance, webRoot: string, sessio
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
 ${url(`${config.publicUrl}/`)}
 ${url(`${config.publicUrl}/fa/`)}
+  <url>
+    <loc>${config.publicUrl}/help/</loc>
+  </url>
 </urlset>
 `,
     );
