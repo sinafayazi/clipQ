@@ -5,13 +5,14 @@ import { z } from "zod";
 import type { DashboardUser, ServerMessage } from "../shared/types.js";
 import { config } from "./config.js";
 import { originAllowed } from "./origin.js";
-import { lookupChannel } from "./kick/api.js";
+import { fetchSubscriberBadges, lookupChannel } from "./kick/api.js";
 import type { KickBot } from "./kick/bot.js";
 import type { KickChat } from "./kick/chat.js";
 import { authorizeUrl, createPkce, exchangeCode, fetchMe, fetchUser, VIEWER_SCOPES } from "./kick/oauth.js";
 import { MAX_TIMEOUT_MS, settingsSchema, songSettingsSchema, type QueueService, type RejectReason } from "./queue/service.js";
 import type { Session, Sessions, ViewerSessions } from "./sessions.js";
 import { rejectText } from "./songs/commands.js";
+import { anyOverlayKeyValid, overlayUrl } from "./overlays/keys.js";
 import { obsKeyValid } from "./songs/obs.js";
 import { parseSongQuery } from "./songs/resolve.js";
 
@@ -356,6 +357,42 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
   viewerAction("/api/s/:slug/songs/:id/remove", z.unknown(), (channelId, viewer, _b, p, reply) =>
     queues.removeOwnSong(channelId, Number(p.id), viewer.id) ? { ok: true } : reply.code(404).send({ error: "That song isn't waiting any more." }),
   );
+
+  // ---- Overlays: secret OBS browser sources (chat + emote streak) ------------------------------
+
+  app.get("/api/overlays", async (req, reply) => {
+    const id = authed(req, reply);
+    if (id === null) return reply;
+    const ch = queues.channel(id);
+    if (!ch) return reply.code(404).send({ error: "Channel not found." });
+    return {
+      chatUrl: overlayUrl("chat", id),
+      streakUrl: overlayUrl("streak", id),
+      chatroomId: ch.chatroomId,
+      slug: ch.slug,
+    };
+  });
+
+  const overlayQuery = z.object({ c: z.coerce.number().int(), k: z.string().max(64) });
+  app.get("/api/overlays/meta", async (req, reply) => {
+    const q = overlayQuery.safeParse(req.query);
+    if (!q.success) return reply.code(401).send({ error: "This overlay link is wrong or old. Copy it again from clipQ." });
+    const ch = queues.channel(q.data.c);
+    if (!ch || !anyOverlayKeyValid(q.data.c, q.data.k)) {
+      return reply.code(401).send({ error: "This overlay link is wrong or old. Copy it again from clipQ." });
+    }
+    if (!ch.chatroomId) {
+      return reply.code(400).send({ error: "This channel has no chatroom id yet. Set it in clipQ first." });
+    }
+    const subscriberBadges = await fetchSubscriberBadges(ch.slug);
+    return {
+      chatroomId: ch.chatroomId,
+      slug: ch.slug,
+      kickUserId: ch.id,
+      pusher: { key: config.pusher.key, cluster: config.pusher.cluster },
+      subscriberBadges,
+    };
+  });
 
   // ---- OBS song player: a browser source with no login, authorised by the key in its link ----
 

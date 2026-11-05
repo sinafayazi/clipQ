@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { songVolume, type DashboardUser, type QueueItem, type QueueKind, type QueueState } from "../shared/types";
 import { api, type Connection } from "./api";
 import { clipTitle, formatDuration, PROVIDER_LABEL } from "./clip-meta";
@@ -66,6 +66,15 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
 
   const live = conn === "live" && state.chatConnected;
 
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (tab === "songs") root.dataset.theme = "songs";
+    else delete root.dataset.theme;
+    return () => {
+      delete root.dataset.theme;
+    };
+  }, [tab]);
+
   return (
     <div className="app">
       <a className="skip" href="#main">
@@ -76,65 +85,78 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
           <span className={`tally${live ? " on" : ""}`} aria-hidden="true" />
           <div className="brand-text">
             <h1>clipQ</h1>
-            {me && me.channels.length > 1 ? (
-              <ChannelSwitcher me={me} current={channel.id} onError={setError} />
-            ) : (
-              <p className="channel">{channel.displayName}</p>
-            )}
+            <div className="brand-meta">
+              {me && me.channels.length > 1 ? (
+                <ChannelSwitcher me={me} current={channel.id} onError={setError} />
+              ) : (
+                <p className="channel">{channel.displayName}</p>
+              )}
+              <p className={`presence${live ? " live" : ""}`} role="status">
+                <LiveIcon size={16} stroke={live ? 2 : 1.5} />
+                {live ? "Chat connected" : "Reconnecting to chat"}
+              </p>
+            </div>
           </div>
         </div>
-        <p className={`presence${live ? " live" : ""}`} role="status">
-          <LiveIcon size={18} stroke={live ? 2 : 1.5} />
-          {live ? "Chat connected" : "Reconnecting to chat"}
-        </p>
         <div className="topbar-actions">
-          <label className="switch">
-            <input
-              type="checkbox"
-              role="switch"
-              checked={settings.open}
-              aria-checked={settings.open}
-              onChange={() => run(api.settings({ open: !settings.open }))}
-            />
-            <span className="switch-ui" />
-            Clips open
-          </label>
-          <label className="switch">
-            <input
-              type="checkbox"
-              role="switch"
-              checked={songs.open}
-              aria-checked={songs.open}
-              onChange={() => run(api.settings({ songs: { open: !songs.open } }))}
-            />
-            <span className="switch-ui" />
-            Songs open
-          </label>
-          <button type="button" className="btn btn-ghost icon-start" onClick={() => setSettingsOpen(true)}>
-            <SettingsIcon size={18} stroke={2} />
-            Settings
-          </button>
-          <a className="btn btn-ghost" href="https://nowpayments.io/donation/sina" target="_blank" rel="noopener">
-            ♥ Donate
-          </a>
-          <button
-            type="button"
-            className="btn btn-ghost icon-start"
-            onClick={() => api.logout().finally(() => (location.href = "/app/"))}
-          >
-            <LogoutIcon size={18} stroke={2} />
-            Log out
-          </button>
+          <div className="topbar-toggles">
+            <label className="switch">
+              <input
+                type="checkbox"
+                role="switch"
+                checked={settings.open}
+                aria-checked={settings.open}
+                onChange={() => run(api.settings({ open: !settings.open }))}
+              />
+              <span className="switch-ui" />
+              Clips open
+            </label>
+            <label className="switch">
+              <input
+                type="checkbox"
+                role="switch"
+                checked={songs.open}
+                aria-checked={songs.open}
+                onChange={() => run(api.settings({ songs: { open: !songs.open } }))}
+              />
+              <span className="switch-ui" />
+              Songs open
+            </label>
+          </div>
+          <div className="topbar-tools">
+            <a className="btn btn-ghost" href="/overlays/">
+              Overlays
+            </a>
+            <button type="button" className="btn btn-ghost icon-start" onClick={() => setSettingsOpen(true)}>
+              <SettingsIcon size={18} stroke={2} />
+              Settings
+            </button>
+            <a className="btn btn-ghost" href="https://nowpayments.io/donation/sina" target="_blank" rel="noopener">
+              ♥ Donate
+            </a>
+            <button
+              type="button"
+              className="btn btn-ghost icon-start"
+              onClick={() => api.logout().finally(() => (location.href = "/app/"))}
+            >
+              <LogoutIcon size={18} stroke={2} />
+              Log out
+            </button>
+          </div>
         </div>
       </header>
 
       <main id="main" className="workspace" tabIndex={-1}>
-        {!channel.chatroomId && <ChatroomPrompt onSave={(id) => run(api.chatroom(id))} />}
-        {error && (
-          <p className="banner error" role="alert">
-            <AlertIcon size={18} stroke={2} />
-            <span>{error}</span>
-          </p>
+        {(!channel.chatroomId || error) && (
+          <div className="notices">
+            {!channel.chatroomId && <ChatroomPrompt onSave={(id) => run(api.chatroom(id))} />}
+            {error && (
+              <p className="banner error" role="alert">
+                <AlertIcon size={18} stroke={2} />
+                <span>{error}</span>
+              </p>
+            )}
+          </div>
         )}
 
         <div className="tabs" role="tablist" aria-label="Lists">
@@ -182,38 +204,42 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
           </div>
           {current && (
             <div className="now">
-              <a href={current.url} target="_blank" rel="noreferrer" title={current.url}>
-                <span className="now-title">{clipTitle(current)}</span>
-                <ExternalIcon size={16} stroke={2} />
-              </a>
-              <p className="now-meta">
-                {PROVIDER_LABEL[current.provider]}
-                {" · "}
-                {current.requestedBy.username}
-                {current.duration != null ? ` · ${formatDuration(current.duration)}` : ""}
-                {settings.voteSkip > 0 && state.skipVotes > 0 ? ` · Skip votes ${state.skipVotes}/${settings.voteSkip}` : ""}
-              </p>
+              <div className="now-copy">
+                <a href={current.url} target="_blank" rel="noreferrer" title={current.url}>
+                  <span className="now-title">{clipTitle(current)}</span>
+                  <ExternalIcon size={16} stroke={2} />
+                </a>
+                <p className="now-meta">
+                  {PROVIDER_LABEL[current.provider]}
+                  {" · "}
+                  {current.requestedBy.username}
+                  {current.duration != null ? ` · ${formatDuration(current.duration)}` : ""}
+                  {settings.voteSkip > 0 && state.skipVotes > 0 ? ` · Skip votes ${state.skipVotes}/${settings.voteSkip}` : ""}
+                </p>
+              </div>
               <BanRequester username={current.requestedBy.username} onBan={setBanTarget} />
             </div>
           )}
           <div className="transport">
-            <button type="button" className="btn icon-start" onClick={() => run(api.previous())} disabled={!history.length}>
-              <PrevIcon size={18} stroke={2} />
-              Previous
-            </button>
-            <button type="button" className="btn icon-start" onClick={() => run(api.next(true))} disabled={!current}>
-              <SkipIcon size={18} stroke={2} />
-              Skip
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary icon-start"
-              onClick={() => run(api.next())}
-              disabled={!current && !queue.length}
-            >
-              <NextIcon size={18} stroke={2} />
-              Next
-            </button>
+            <div className="transport-nav">
+              <button type="button" className="btn icon-start" onClick={() => run(api.previous())} disabled={!history.length}>
+                <PrevIcon size={18} stroke={2} />
+                Previous
+              </button>
+              <button type="button" className="btn icon-start" onClick={() => run(api.next(true))} disabled={!current}>
+                <SkipIcon size={18} stroke={2} />
+                Skip
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary icon-start"
+                onClick={() => run(api.next())}
+                disabled={!current && !queue.length}
+              >
+                <NextIcon size={18} stroke={2} />
+                Next
+              </button>
+            </div>
             <VolumeSlider value={settings.volume} onChange={(volume) => run(api.settings({ volume }))} />
           </div>
         </section>
@@ -401,37 +427,41 @@ function SongsView({
         </div>
         {current && (
           <div className="now">
-            <a href={current.url} target="_blank" rel="noreferrer" title={current.url}>
-              <span className="now-title">{current.title ?? "Song"}</span>
-              <ExternalIcon size={16} stroke={2} />
-            </a>
-            <p className="now-meta">
-              {current.requestedBy.username}
-              {current.duration != null ? ` · ${formatDuration(current.duration)}` : ""}
-              {s.voteSkip > 0 && skipVotes > 0 ? ` · Skip votes ${skipVotes}/${s.voteSkip}` : ""}
-              {songVolume(state.settings.volume, current.loudness, state.settings.normalize) !== state.settings.volume ? " · Quiet song, turned up" : ""}
-            </p>
+            <div className="now-copy">
+              <a href={current.url} target="_blank" rel="noreferrer" title={current.url}>
+                <span className="now-title">{current.title ?? "Song"}</span>
+                <ExternalIcon size={16} stroke={2} />
+              </a>
+              <p className="now-meta">
+                {current.requestedBy.username}
+                {current.duration != null ? ` · ${formatDuration(current.duration)}` : ""}
+                {s.voteSkip > 0 && skipVotes > 0 ? ` · Skip votes ${skipVotes}/${s.voteSkip}` : ""}
+                {songVolume(state.settings.volume, current.loudness, state.settings.normalize) !== state.settings.volume ? " · Quiet song, turned up" : ""}
+              </p>
+            </div>
             <BanRequester username={current.requestedBy.username} onBan={onBan} />
           </div>
         )}
         <div className="transport">
-          <button type="button" className="btn icon-start" onClick={() => run(api.previous("songs"))} disabled={!history.length}>
-            <PrevIcon size={18} stroke={2} />
-            Previous
-          </button>
-          <button type="button" className="btn icon-start" onClick={() => run(api.next(true, "songs"))} disabled={!current}>
-            <SkipIcon size={18} stroke={2} />
-            Skip
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary icon-start"
-            onClick={() => run(api.next(false, "songs"))}
-            disabled={!current && !queue.length}
-          >
-            <NextIcon size={18} stroke={2} />
-            Next
-          </button>
+          <div className="transport-nav">
+            <button type="button" className="btn icon-start" onClick={() => run(api.previous("songs"))} disabled={!history.length}>
+              <PrevIcon size={18} stroke={2} />
+              Previous
+            </button>
+            <button type="button" className="btn icon-start" onClick={() => run(api.next(true, "songs"))} disabled={!current}>
+              <SkipIcon size={18} stroke={2} />
+              Skip
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary icon-start"
+              onClick={() => run(api.next(false, "songs"))}
+              disabled={!current && !queue.length}
+            >
+              <NextIcon size={18} stroke={2} />
+              Next
+            </button>
+          </div>
           <VolumeSlider value={state.settings.volume} onChange={(volume) => run(api.settings({ volume }))} />
         </div>
       </section>
