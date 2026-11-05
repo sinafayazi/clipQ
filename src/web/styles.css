@@ -38,7 +38,7 @@
   --color-danger-solid: var(--red-deep);
   --color-danger-solid-hover: var(--red-deep-hover);
 
-  --font-ui: "Source Sans 3", "Segoe UI", sans-serif;
+  --font-ui: "Plus Jakarta Sans", "Segoe UI", sans-serif;
   --font-display: "Bricolage Grotesque", "Segoe UI", sans-serif;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --radius: 12px;
