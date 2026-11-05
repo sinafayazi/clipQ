@@ -201,45 +201,57 @@ function OverlaysHub() {
       <a className="skip" href="#main">
         Skip to content
       </a>
-      <header className="overlays-topbar">
-        <div className="brand">
-          <span className="tally on" aria-hidden="true" />
-          <div className="brand-text">
-            <h1>Overlays</h1>
-            <p className="channel">{info?.slug ?? "clipQ"}</p>
+      <header className="topbar overlays-topbar">
+        <div className="topbar-start">
+          <div className="brand">
+            <div className="brand-mark">
+              <span className="tally on" aria-hidden="true" />
+              <h1>clipQ</h1>
+            </div>
+            <div className="brand-meta">
+              <p className="channel">{info?.slug ?? "clipQ"}</p>
+              <p className="presence" role="status">
+                Overlays
+              </p>
+            </div>
+          </div>
+          <div className="tabs" role="tablist" aria-label="Overlay">
+            <button
+              type="button"
+              role="tab"
+              id="tab-chat"
+              aria-selected={tab === "chat"}
+              aria-controls="panel-overlay"
+              onClick={() => setTab("chat")}
+            >
+              Chat
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-streak"
+              aria-selected={tab === "streak"}
+              aria-controls="panel-overlay"
+              onClick={() => setTab("streak")}
+            >
+              Emote streak
+            </button>
           </div>
         </div>
-        <div className="overlays-topbar-end">
+        <div className="topbar-tools">
           <a className="btn btn-ghost" href="/app/">
             Dashboard
           </a>
         </div>
       </header>
 
-      <div className="overlays-shell">
+      <div
+        className="overlays-shell"
+        id="panel-overlay"
+        role="tabpanel"
+        aria-labelledby={tab === "chat" ? "tab-chat" : "tab-streak"}
+      >
         <aside className="overlays-sidebar" aria-label="Overlay settings">
-          <div className="overlays-sidebar-head">
-            <p className="overlays-group">Browser sources</p>
-            <nav className="overlays-nav" aria-label="Overlay">
-              <button
-                type="button"
-                className="overlays-nav-item"
-                aria-current={tab === "chat" ? "page" : undefined}
-                onClick={() => setTab("chat")}
-              >
-                Chat
-              </button>
-              <button
-                type="button"
-                className="overlays-nav-item"
-                aria-current={tab === "streak" ? "page" : undefined}
-                onClick={() => setTab("streak")}
-              >
-                Emote streak
-              </button>
-            </nav>
-          </div>
-
           <div className="overlays-sidebar-scroll">
             {error && (
               <p className="banner error" role="alert">
@@ -277,7 +289,7 @@ function OverlaysHub() {
               <div className="overlays-controls">
                 <fieldset className="overlays-fieldset">
                   <legend>Preview</legend>
-                  <div className="overlays-segment" role="group" aria-label="Preview source">
+                  <div className="chips" role="group" aria-label="Preview source">
                     {(
                       [
                         ["fake", "Fake chat"],
@@ -287,7 +299,7 @@ function OverlaysHub() {
                       <button
                         key={id}
                         type="button"
-                        className="overlays-segment-btn"
+                        className="chip"
                         aria-pressed={chat.preview === id}
                         onClick={() => patchChat("preview", id as ChatPreviewSource)}
                       >
@@ -302,12 +314,12 @@ function OverlaysHub() {
 
                 <fieldset className="overlays-fieldset">
                   <legend>Layout</legend>
-                  <div className="overlays-segment overlays-segment-wrap" role="group" aria-label="Chat layout">
+                  <div className="chips" role="group" aria-label="Chat layout">
                     {LAYOUT_OPTIONS.map((opt) => (
                       <button
                         key={opt.id}
                         type="button"
-                        className="overlays-segment-btn"
+                        className="chip"
                         aria-pressed={chat.layout === opt.id}
                         onClick={() => patchChat("layout", opt.id as ChatLayout)}
                       >
@@ -322,7 +334,7 @@ function OverlaysHub() {
 
                 <fieldset className="overlays-fieldset">
                   <legend>Profile pics</legend>
-                  <div className="overlays-segment" role="group" aria-label="Profile pictures">
+                  <div className="chips" role="group" aria-label="Profile pictures">
                     {(
                       [
                         [true, "On"],
@@ -332,7 +344,7 @@ function OverlaysHub() {
                       <button
                         key={label}
                         type="button"
-                        className="overlays-segment-btn"
+                        className="chip"
                         aria-pressed={chat.showPfp === on}
                         onClick={() => patchChat("showPfp", on)}
                       >
@@ -504,12 +516,12 @@ function OverlaysHub() {
 
                 <fieldset className="overlays-fieldset">
                   <legend>Fade in</legend>
-                  <div className="overlays-segment overlays-segment-wrap" role="group" aria-label="Fade in animation">
+                  <div className="chips" role="group" aria-label="Fade in animation">
                     {FADE_IN_OPTIONS.map((opt) => (
                       <button
                         key={opt.id}
                         type="button"
-                        className="overlays-segment-btn"
+                        className="chip"
                         aria-pressed={chat.fadeIn === opt.id}
                         onClick={() => patchChat("fadeIn", opt.id as ChatFadeIn)}
                       >
@@ -569,7 +581,7 @@ function OverlaysHub() {
               <div className="overlays-controls">
                 <fieldset className="overlays-fieldset">
                   <legend>Preview</legend>
-                  <div className="overlays-segment" role="group" aria-label="Preview source">
+                  <div className="chips" role="group" aria-label="Preview source">
                     {(
                       [
                         ["fake", "Fake streak"],
@@ -579,7 +591,7 @@ function OverlaysHub() {
                       <button
                         key={id}
                         type="button"
-                        className="overlays-segment-btn"
+                        className="chip"
                         aria-pressed={streak.preview === id}
                         onClick={() => patchStreak("preview", id as StreakPreviewSource)}
                       >
@@ -618,12 +630,12 @@ function OverlaysHub() {
 
                 <fieldset className="overlays-fieldset">
                   <legend>Fade in</legend>
-                  <div className="overlays-segment overlays-segment-wrap" role="group" aria-label="Fade in animation">
+                  <div className="chips" role="group" aria-label="Fade in animation">
                     {FADE_IN_OPTIONS.map((opt) => (
                       <button
                         key={opt.id}
                         type="button"
-                        className="overlays-segment-btn"
+                        className="chip"
                         aria-pressed={streak.fadeIn === opt.id}
                         onClick={() => patchStreak("fadeIn", opt.id as ChatFadeIn)}
                       >
