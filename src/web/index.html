@@ -42,6 +42,7 @@
     <script type="module" src="./landing-motion.ts"></script>
     <script type="module" src="./landing-platforms.ts"></script>
     <script type="module" src="./landing-lava.ts"></script>
+    <script type="module" src="./landing-light-rays.ts"></script>
 
     <script type="application/ld+json">
       {
@@ -102,10 +103,15 @@
 
     <main id="main">
       <section class="hero">
+        <!-- Spell UI Light Rays (https://spell.sh/docs/light-rays) -->
+        <!-- TEST: compare hero-lava (flipped) vs hero-rays — hide one to switch -->
+        <div id="hero-lava" class="hero-lava" aria-hidden="true"></div>
+        <div id="hero-rays" class="hero-rays" aria-hidden="true" hidden></div>
         <div class="wrap hero-copy">
           <h1>Your chat picks the clips. You hit play.</h1>
           <p class="lede">
-            Viewers drop Kick, YouTube, Twitch, TikTok and more into chat. clipQ lines them up so you can watch them on stream, in order.
+            Viewers paste clip links in Kick chat.<br />
+            clipQ queues them so you play on stream, in order.
           </p>
           <div class="cta-row">
             <a class="rich-btn rich-btn-red rich-btn-lg" href="/app/">Log in with Kick</a>
@@ -113,38 +119,115 @@
           </div>
         </div>
 
-        <div class="wrap">
-          <figure class="demo" aria-label="Example: links posted in Kick chat appear in the clipQ queue">
-            <div class="demo-panels" aria-hidden="true">
-              <div class="demo-chat">
-                <p class="demo-head"><span class="kick-dot"></span>Kick chat</p>
-                <ol id="demo-chat" class="chat-lines">
-                  <li class="chat-line"><b style="color: #ffa600">Radin_SD</b><span>W stream today</span></li>
-                  <li class="chat-line"><b style="color: #00f1ff">LowGraphic</b><span class="chat-link" dir="ltr">youtu.be/xK2…</span></li>
-                  <li class="chat-line"><b style="color: #b388ff">Amir_1446</b><span class="chat-link" dir="ltr">clips.twitch.tv/Wild…</span></li>
-                  <li class="chat-line"><b style="color: #ff6b9a">Mahsa</b><span>play mine next pls</span></li>
-                  <li class="chat-line"><b style="color: #53fc18">Siiinfa</b><span class="chat-link" dir="ltr">tiktok.com/@…/video/73…</span></li>
-                </ol>
+        <div class="wrap wrap-demo">
+          <figure class="demo safari" data-mode="simple" aria-label="Interactive clipQ dashboard preview">
+            <div class="safari-toolbar" aria-hidden="true">
+              <div class="safari-controls">
+                <span class="safari-dot close"></span>
+                <span class="safari-dot minimize"></span>
+                <span class="safari-dot zoom"></span>
               </div>
-              <div class="demo-app">
-                <p class="demo-head"><span class="tally"></span>clipQ</p>
-                <div id="demo-now" class="demo-now">
-                  <div class="demo-screen kick">
-                    <span class="demo-play"></span>
-                    <span class="demo-progress run"></span>
-                  </div>
-                  <p class="demo-now-title">Insane clutch, final round</p>
-                  <p class="demo-now-meta">Kick · requested by Radin_SD · 0:41</p>
-                </div>
-                <ol id="demo-queue" class="demo-queue">
-                  <li class="demo-card"><span class="demo-thumb youtube"><span class="dur">0:58</span></span><span class="demo-card-text"><b>Funniest fail of the week</b><small>YouTube · LowGraphic</small></span></li>
-                  <li class="demo-card"><span class="demo-thumb twitch"><span class="dur">0:30</span></span><span class="demo-card-text"><b>Chat goes wild</b><small>Twitch · Amir_1446</small></span></li>
-                  <li class="demo-card"><span class="demo-thumb tiktok"><span class="dur">0:22</span></span><span class="demo-card-text"><b>Cat vs printer</b><small>TikTok · Siiinfa</small></span></li>
-                </ol>
+              <div class="safari-address">
+                <svg class="safari-lock" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M8 1a3 3 0 0 0-3 3v2H4.5A1.5 1.5 0 0 0 3 7.5v5A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 6H11V4a3 3 0 0 0-3-3Zm1.5 5H6.5V4a1.5 1.5 0 1 1 3 0v2Z"
+                  />
+                </svg>
+                <span class="safari-url" dir="ltr">kickQ.app</span>
               </div>
             </div>
-            <figcaption>Links in chat become a queue, in the order they arrived.</figcaption>
+            <div class="safari-screen">
+            <div class="demo-dash" data-demo>
+              <header class="demo-topbar">
+                <div class="demo-topbar-start">
+                  <div class="demo-brand">
+                    <div class="demo-brand-mark">
+                      <span class="tally on" aria-hidden="true"></span>
+                      <p class="demo-brand-name">clipQ</p>
+                    </div>
+                    <div class="demo-brand-meta">
+                      <p class="demo-channel">xQc</p>
+                      <p class="demo-presence">Chat connected</p>
+                    </div>
+                  </div>
+                  <div class="demo-tabs" role="tablist" aria-label="Lists">
+                    <button type="button" role="tab" data-demo-tab="clips" aria-selected="true">
+                      Clips <span class="demo-tab-count" data-demo-tab-count>3</span>
+                    </button>
+                    <button type="button" role="tab" data-demo-tab="songs" aria-selected="false">
+                      Songs <span class="demo-tab-count" data-demo-tab-count>2</span>
+                    </button>
+                  </div>
+                </div>
+              </header>
+
+              <div class="demo-workspace">
+                <section class="demo-player-col">
+                  <div class="demo-player">
+                    <div class="demo-screen tone-a" data-demo-screen>
+                      <span class="demo-play" aria-hidden="true"></span>
+                      <span class="demo-progress run" data-demo-progress></span>
+                    </div>
+                    <div class="demo-empty" data-demo-empty hidden>
+                      <h2 data-demo-empty-title>Waiting for clips</h2>
+                      <p data-demo-empty-body>New clips from chat will start here.</p>
+                    </div>
+                  </div>
+                  <div class="demo-now" data-demo-now>
+                    <p class="demo-now-title" data-demo-title>Me at the zoo</p>
+                    <p class="demo-now-meta" data-demo-meta>YouTube · requested by jawed · 0:19</p>
+                  </div>
+                  <div class="demo-transport">
+                    <button type="button" class="demo-btn" data-demo-prev>Previous</button>
+                    <button type="button" class="demo-btn" data-demo-skip>Skip</button>
+                    <button type="button" class="demo-btn demo-btn-primary" data-demo-next>Next</button>
+                  </div>
+                </section>
+
+                <aside class="demo-queue-col">
+                  <div class="demo-queue-tools">
+                    <label class="demo-switch">
+                      <input type="checkbox" role="switch" checked data-demo-open />
+                      <span class="demo-switch-ui" aria-hidden="true"></span>
+                      <span data-demo-open-label>Clips open</span>
+                    </label>
+                  </div>
+                  <div class="demo-queue-head">
+                    <h2 data-demo-queue-heading>Queue</h2>
+                    <p class="demo-queue-count" data-demo-queue-count>3 waiting</p>
+                  </div>
+                  <div data-demo-queue>
+                    <ol class="demo-clips">
+                      <li class="demo-clip">
+                        <span class="demo-thumb tone-b"><span class="dur">10:34</span></span>
+                        <div class="demo-clip-body">
+                          <p class="demo-clip-title">1. Big Buck Bunny</p>
+                          <p class="demo-clip-meta">YouTube · Blender</p>
+                        </div>
+                      </li>
+                      <li class="demo-clip">
+                        <span class="demo-thumb tone-c"><span class="dur">0:52</span></span>
+                        <div class="demo-clip-body">
+                          <p class="demo-clip-title">2. Sintel trailer</p>
+                          <p class="demo-clip-meta">YouTube · Blender</p>
+                        </div>
+                      </li>
+                      <li class="demo-clip">
+                        <span class="demo-thumb tone-d"><span class="dur">10:54</span></span>
+                        <div class="demo-clip-body">
+                          <p class="demo-clip-title">3. Elephants Dream</p>
+                          <p class="demo-clip-meta">YouTube · Blender</p>
+                        </div>
+                      </li>
+                    </ol>
+                  </div>
+                </aside>
+              </div>
+            </div>
+            </div>
           </figure>
+          <p class="demo-caption">Try the dashboard: switch tabs, toggle the queue, skip to the next clip.</p>
         </div>
       </section>
 
