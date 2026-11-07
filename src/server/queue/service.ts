@@ -658,6 +658,7 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
         username: viewer.username,
         queued: tl.queue.filter((q) => q.item.requestedBy.id === viewer.id).map((q) => pub(q.item, q.startsIn)),
         history,
+        manage: false,
       };
     }
     return {
@@ -730,6 +731,19 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
       ids.forEach((id, i) => set.run(base + i, id));
       return true;
     });
+  }
+
+  /** Move a waiting song (only a song: the song page and `!sr move` must not touch clips). */
+  moveSong(channelId: number, itemId: number, toIndex: number): boolean {
+    return this.itemRow(channelId, itemId)?.queue === "songs" && this.move(channelId, itemId, toIndex);
+  }
+
+  /** The id of the waiting song at a 1-based position in the list, as the song page numbers them. */
+  songAt(channelId: number, position: number): number | null {
+    const row = this.db
+      .prepare(`SELECT id FROM items WHERE channel_id = ? AND queue = 'songs' AND status = 'queued' ORDER BY position, id LIMIT 1 OFFSET ?`)
+      .get(channelId, position - 1) as { id: number } | undefined;
+    return position >= 1 && row ? row.id : null;
   }
 
   clear(channelId: number, kind: QueueKind = "clips") {

@@ -204,8 +204,8 @@ export interface PublicSongs {
   open: boolean;
   current: PublicSong | null;
   queue: PublicSong[];
-  /** Null when the viewer isn't logged in. */
-  me: { username: string; queued: PublicSong[]; history: PublicSong[] } | null;
+  /** Null when the viewer isn't logged in. `manage`: they may reorder the whole list (owner, a mod on the access list, a clipQ super user). */
+  me: { username: string; queued: PublicSong[]; history: PublicSong[]; manage: boolean } | null;
 }
 
 /** A remote play/pause for one list's player. `seq` increases with every command. */

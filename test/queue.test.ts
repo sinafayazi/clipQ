@@ -456,6 +456,23 @@ describe("song requests", () => {
     s.updateSettings(CH, { open: true, songs: { ...s.settings(CH).songs, open: true, requestCooldown: 0 } });
   });
 
+  it("moves a waiting song by its place in the list, and never a clip", async () => {
+    s.updateSettings(CH, { songs: { ...s.settings(CH).songs, perUserLimit: 0 } });
+    for (const t of ["a", "b", "c", "d"]) await req(t); // a plays, b c d wait
+    expect(titles()).toEqual(["bxxxxxxxxxx", "cxxxxxxxxxx", "dxxxxxxxxxx"]);
+    expect(s.songAt(CH, 0)).toBeNull();
+    expect(s.songAt(CH, 4)).toBeNull();
+    const d = s.songAt(CH, 3)!;
+    expect(s.moveSong(CH, d, 0)).toBe(true);
+    expect(titles()).toEqual(["dxxxxxxxxxx", "bxxxxxxxxxx", "cxxxxxxxxxx"]);
+    expect(s.moveSong(CH, d, 99)).toBe(true); // past the end: last
+    expect(titles()).toEqual(["bxxxxxxxxxx", "cxxxxxxxxxx", "dxxxxxxxxxx"]);
+
+    await s.submit(CH, yt("clip1"), alice, "m1");
+    const clip = s.state(CH, true).queue[0]?.id ?? s.state(CH, true).current!.id;
+    expect(s.moveSong(CH, clip, 0)).toBe(false);
+  });
+
   it("makes a viewer wait between requests, says how long, and lets !wrongsong or mods skip the wait", async () => {
     s.updateSettings(CH, { songs: { ...s.settings(CH).songs, requestCooldown: 120 } });
     expect((await req("a")).ok).toBe(true);

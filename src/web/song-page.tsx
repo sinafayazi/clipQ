@@ -147,8 +147,30 @@ function SongPage() {
         ) : (
           <ol className="song-list">
             {data.queue.map((s, i) => (
-              <li key={s.id}>
+              <li key={s.id} className={me?.manage ? "managed-song" : undefined}>
                 <SongCard song={s} position={i + 1} mine={me?.queued.some((m) => m.id === s.id)} />
+                {me?.manage && (
+                  <div className="song-move" role="group" aria-label={`Move ${s.title ?? "song"}`}>
+                    {(
+                      [
+                        ["Top", 0, i === 0],
+                        ["▲", i - 1, i === 0],
+                        ["▼", i + 1, i === data.queue.length - 1],
+                      ] as const
+                    ).map(([label, to, off]) => (
+                      <button
+                        key={label}
+                        type="button"
+                        className="btn btn-ghost"
+                        disabled={off}
+                        aria-label={label === "Top" ? "Move to the top" : label === "▲" ? "Move up" : "Move down"}
+                        onClick={() => void act(post(`${base}/songs/${s.id}/move`, { index: to }))}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </li>
             ))}
           </ol>

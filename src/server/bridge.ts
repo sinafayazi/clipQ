@@ -21,7 +21,7 @@ export function commandsText(voteSkip: number): string {
     `clipQ: post a clip link to queue it. ${vote} ` +
     `Songs: !sr <link or name>, !song, !mysong, !wrongsong, !songs, !vs (vote skip). ` +
     `Mods: !cq open/close/play/pause/next/skip/prev/clear, !cq ban/unban <user>, !cq timeout <user> [10m], !cq votes <n>, ` +
-    `!sr open/close/play/pause/skip/clear, !sr remove <user>, !sr votes <n>, !volume <0-100>.`
+    `!sr open/close/play/pause/skip/clear, !sr remove <user>, !sr move <from> <to>, !sr votes <n>, !volume <0-100>.`
   ).replace(/\s+/g, " ");
 }
 

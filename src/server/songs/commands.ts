@@ -14,6 +14,7 @@ import { parseSongQuery } from "./resolve.js";
 //   !vs (or !voteskip)                         vote to skip the playing song
 //   !volume                                    the volume (clips and songs)
 // Broadcaster and moderators: !sr open|close|play|pause|skip|next|prev|clear, !sr remove <user>,
+//   !sr move <from> <to> (positions in the song list, 1 = next up),
 //   !sr votes <n> (votes to skip a song, 0 = off) (also as !songs …), !volume <0-100> (or +10 / -10).
 
 /** Info commands (!song, !songs) answer at most this often per channel. */
@@ -197,7 +198,7 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
     void bot.say(channel.id, `Volume set to ${next}%.`, msg.id);
   }
 
-  function modCommand(channel: ChannelInfo, msg: ChatMessage, arg: string, target: string | undefined) {
+  function modCommand(channel: ChannelInfo, msg: ChatMessage, arg: string, target: string | undefined, extra?: string) {
     const canControl = msg.sender.badges.includes("broadcaster") || msg.sender.badges.includes("moderator");
     if (!canControl) return false;
     const id = channel.id;
@@ -231,6 +232,21 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
       case "remove":
         if (target) queues.removeSongsByName(id, target);
         return true;
+      case "move": {
+        // !sr move <from> <to>, by the numbers on the song page (1 = next up).
+        const from = Number(target);
+        const to = Number(extra);
+        const song = Number.isInteger(from) ? queues.songAt(id, from) : null;
+        if (song === null || !Number.isInteger(to) || to < 1) {
+          void bot.say(id, "Use !sr move <from> <to> with the numbers from the song list, e.g. !sr move 5 1.", msg.id);
+          return true;
+        }
+        queues.moveSong(id, song, to - 1);
+        const waiting = queues.songTimeline(id).queue;
+        const at = waiting.findIndex((q) => q.item.id === song);
+        void bot.say(id, `Moved "${waiting[at]?.item.title ?? "that song"}" to #${at + 1}.`, msg.id);
+        return true;
+      }
       case "votes": {
         const s = queues.settings(id).songs;
         const next = adjust(s.voteSkip, target, 1000);
@@ -251,8 +267,10 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
       case "!sr":
       case "!songrequest": {
         // "!sr skip" from a mod is a control command; from anyone else it's a song called "skip".
-        const [arg, target] = restParts.map((p) => p.toLowerCase());
-        if (arg && restParts.length <= 2 && modCommand(channel, msg, arg, target)) return true;
+        // Only "move" takes two arguments, so "!sr skip the beat" from a mod still requests that song.
+        const [arg, target, extra] = restParts.map((p) => p.toLowerCase());
+        const isCommand = restParts.length <= 2 || (arg === "move" && restParts.length === 3);
+        if (arg && isCommand && modCommand(channel, msg, arg, target, extra)) return true;
         void request(channel, msg, rest);
         return true;
       }
