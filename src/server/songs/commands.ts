@@ -15,7 +15,7 @@ import { parseSongQuery } from "./resolve.js";
 //   !volume                                    the volume (clips and songs)
 // Broadcaster and moderators: !sr open|close|play|pause|skip|next|prev|clear, !sr remove <user>,
 //   !sr move <from> <to> (positions in the song list, 1 = next up),
-//   !sr votes <n> (votes to skip a song, 0 = off) (also as !songs …), !volume <0-100> (or +10 / -10).
+//   !sr votes <n> (votes to skip a song, 0 = off) (also as !songs …), !volume <0-100> (or +10 / -10, also as !sr volume).
 
 /** Info commands (!song, !songs) answer at most this often per channel. */
 const INFO_COOLDOWN_MS = 10_000;
@@ -247,6 +247,11 @@ export function songCommands({ queues, bot, log, publicUrl, vote }: Deps) {
         void bot.say(id, `Moved "${waiting[at]?.item.title ?? "that song"}" to #${at + 1}.`, msg.id);
         return true;
       }
+      case "volume":
+      case "vol":
+        // "!sr volume 40": the same one volume as !volume.
+        volume(channel, msg, target);
+        return true;
       case "votes": {
         const s = queues.settings(id).songs;
         const next = adjust(s.voteSkip, target, 1000);
