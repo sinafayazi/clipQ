@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { DashboardUser, QueueKind, QueueSettings, QueueState, ServerMessage, SongSettings } from "../shared/types";
+import type { DashboardUser, QueueKind, QueueSettings, QueueState, RewardSettings, ServerMessage, SongSettings } from "../shared/types";
 
 export class ApiError extends Error {
   constructor(
@@ -23,7 +23,10 @@ export async function post(path: string, body?: unknown) {
 }
 
 /** A settings change. Song settings can be changed one field at a time too. */
-export type SettingsPatch = Partial<Omit<QueueSettings, "songs">> & { songs?: Partial<SongSettings> };
+export type SettingsPatch = Partial<Omit<QueueSettings, "songs" | "rewards">> & {
+  songs?: Partial<SongSettings>;
+  rewards?: Partial<RewardSettings>;
+};
 
 export const api = {
   async config(): Promise<{ oauth: boolean; devLogin: boolean }> {
@@ -55,6 +58,12 @@ export const api = {
     const res = await fetch("/api/bot/test", { method: "POST" });
     if (!res.ok) throw new ApiError(res.status, `Request failed (${res.status})`);
     return res.json();
+  },
+  /** Whether clipQ may time viewers out (the streamer's login allows moderation). null = can't tell. */
+  async canModerate(): Promise<boolean | null> {
+    const res = await fetch("/api/rewards/check");
+    if (!res.ok) return null;
+    return (await res.json()).canModerate;
   },
 };
 

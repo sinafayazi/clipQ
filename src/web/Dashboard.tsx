@@ -25,7 +25,7 @@ import {
 import { Player, useAutoplay, usePlayerControl, usePlayingReport } from "./Player";
 import { useDragReorder } from "./reorder";
 import { CopyLink } from "./CopyLink";
-import { BanDialog, SettingsDialog } from "./Settings";
+import { BanDialog, ChannelPointsDialog, SettingsDialog } from "./Settings";
 
 export function Dashboard({ state, conn }: { state: QueueState; conn: Connection }) {
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +33,7 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
   const clearDialog = useRef<HTMLDialogElement>(null);
   const [clearKind, setClearKind] = useState<QueueKind>("clips");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pointsOpen, setPointsOpen] = useState(false);
   const [banTarget, setBanTarget] = useState<string | null>(null);
   const me = useMe(state.editors);
   // Only one of clip and song plays at a time: a clip that comes up while a song plays loads paused
@@ -116,6 +117,9 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
           <a className="btn btn-ghost" href="/overlays/">
             Overlays
           </a>
+          <button type="button" className="btn btn-ghost" onClick={() => setPointsOpen(true)}>
+            Channel points
+          </button>
           <a className="btn btn-ghost" href="https://nowpayments.io/donation/sina" target="_blank" rel="noopener">
             ♥ Donate
           </a>
@@ -281,6 +285,7 @@ export function Dashboard({ state, conn }: { state: QueueState; conn: Connection
       </dialog>
 
       <SettingsDialog state={state} kind={tab} isOwner={me?.role !== "editor"} open={settingsOpen} onClose={() => setSettingsOpen(false)} run={run} />
+      <ChannelPointsDialog state={state} open={pointsOpen} onClose={() => setPointsOpen(false)} run={run} />
       <BanDialog username={banTarget} onClose={() => setBanTarget(null)} run={run} />
     </div>
   );

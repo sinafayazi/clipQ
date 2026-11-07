@@ -7,6 +7,7 @@ import {
   type Provider,
   type QueueKind,
   type QueueState,
+  type RewardSettings,
   type SongSettings,
 } from "../shared/types";
 import { api } from "./api";
@@ -285,14 +286,105 @@ function SongSettingsSection({ state, run }: { state: QueueState; run: Run }) {
           </button>
         ))}
       </div>
-
-      <RewardField value={s.priorityReward} onSave={(priorityReward) => save({ priorityReward })} />
     </section>
   );
 }
 
-/** The channel point reward that sends the redeemer's next song to the top. Saves on Enter or when you leave it. */
-function RewardField({ value, onSave }: { value: string; onSave: (title: string) => void }) {
+/** Its own window, apart from clip and song settings. */
+export function ChannelPointsDialog({ state, open, onClose, run }: { state: QueueState; open: boolean; onClose: () => void; run: Run }) {
+  const ref = useModal(open, onClose);
+  return (
+    <dialog ref={ref} className="dialog dialog-wide" aria-labelledby="points-dialog-title" onClick={closeOnBackdrop}>
+      <div className="dialog-head">
+        <h2 id="points-dialog-title">Channel points</h2>
+        <button type="button" className="btn btn-ghost btn-icon" aria-label="Close channel points" onClick={onClose}>
+          <CloseIcon size={18} stroke={2} />
+        </button>
+      </div>
+      <ChannelPointsSection settings={state.settings.rewards} run={run} />
+    </dialog>
+  );
+}
+
+/** Kick channel point rewards clipQ acts on. Each is matched by its title on Kick. */
+function ChannelPointsSection({ settings, run }: { settings: RewardSettings; run: Run }) {
+  const save = (rewards: Partial<RewardSettings>) => run(api.settings({ rewards }));
+  const usesTimeout = settings.timeout.trim() !== "" || settings.untimeout.trim() !== "";
+  // Only asked when a timeout reward is set: it calls Kick.
+  const [canModerate, setCanModerate] = useState<boolean | null | undefined>(undefined);
+  useEffect(() => {
+    if (!usesTimeout) return;
+    let live = true;
+    api.canModerate().then((ok) => live && setCanModerate(ok), () => live && setCanModerate(null));
+    return () => {
+      live = false;
+    };
+  }, [usesTimeout]);
+
+  return (
+    <section className="settings-section" aria-label="Channel point rewards">
+      <p className="settings-hint">
+        Make the reward on Kick first, then type its name here exactly as it is on Kick. Leave a box empty to turn that one off.
+      </p>
+      <TextField
+        id="reward-song-top"
+        label="Song to the top"
+        hint="The viewer's next waiting song moves to the top."
+        value={settings.songToTop}
+        onSave={(songToTop) => save({ songToTop })}
+      />
+      <TextField
+        id="reward-timeout"
+        label="Time someone out"
+        hint="The viewer types a name when they redeem it, and that viewer is timed out on Kick. Mods and you can't be. Turn on “user input” for this reward on Kick."
+        value={settings.timeout}
+        onSave={(timeout) => save({ timeout })}
+      />
+      <div className="number-grid">
+        <NumberField
+          id="reward-timeout-minutes"
+          label="Timeout (minutes)"
+          value={settings.timeoutMinutes}
+          min={1}
+          max={10080}
+          onSave={(timeoutMinutes) => save({ timeoutMinutes })}
+        />
+      </div>
+      <TextField
+        id="reward-untimeout"
+        label="Lift a timeout"
+        hint="The viewer types a name, and that viewer's timeout ends. It never lifts a permanent ban. Turn on “user input” for this reward on Kick."
+        value={settings.untimeout}
+        onSave={(untimeout) => save({ untimeout })}
+      />
+      {usesTimeout && canModerate === false && (
+        <p className="settings-hint settings-warn" role="status">
+          clipQ can't time people out yet: log out, log in again, and allow moderation when Kick asks.
+        </p>
+      )}
+      {usesTimeout && canModerate === true && (
+        <p className="settings-hint" role="status">
+          Ready: clipQ times people out with your login, so its bot doesn't need to be a mod.
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** A text input that saves on Enter or when you leave it. */
+function TextField({
+  id,
+  label,
+  hint,
+  value,
+  onSave,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  value: string;
+  onSave: (text: string) => void;
+}) {
   const [text, setText] = useState(value);
   useEffect(() => setText(value), [value]);
   const save = () => {
@@ -300,9 +392,9 @@ function RewardField({ value, onSave }: { value: string; onSave: (title: string)
   };
   return (
     <div className="field">
-      <label htmlFor="song-priority-reward">Channel point reward: song to the top</label>
+      <label htmlFor={id}>{label}</label>
       <input
-        id="song-priority-reward"
+        id={id}
         value={text}
         maxLength={100}
         placeholder="Reward name, exactly as on Kick"
@@ -316,9 +408,7 @@ function RewardField({ value, onSave }: { value: string; onSave: (title: string)
         }}
         autoComplete="off"
       />
-      <p className="settings-hint">
-        When a viewer redeems this reward on Kick, their next waiting song moves to the top. Leave empty to turn it off.
-      </p>
+      <p className="settings-hint">{hint}</p>
     </div>
   );
 }

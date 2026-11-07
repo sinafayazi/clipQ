@@ -6,6 +6,12 @@ import { refreshTokens, type OAuthConfig, type Tokens } from "./oauth.js";
 // Docs: https://docs.kick.com/apis/chat
 
 const CHAT = "https://api.kick.com/public/v1/chat";
+const BANS = "https://api.kick.com/public/v1/moderation/bans";
+const CHANNELS = "https://api.kick.com/public/v1/channels";
+export const MODERATION_SCOPE = "moderation:ban";
+const MAX_TIMEOUT_MINUTES = 7 * 24 * 60;
+/** What the bot says when the streamer's login can't time people out. */
+export const NEEDS_MODERATION = "clipQ can't time people out yet: the streamer has to log in to clipQ again and allow moderation.";
 const INTROSPECT = "https://id.kick.com/oauth/token/introspect";
 /** Refresh a little before the token runs out. */
 const REFRESH_EARLY_MS = 60_000;
@@ -106,6 +112,78 @@ export class KickBot {
       return body.data?.scope ?? null;
     } catch {
       return null;
+    }
+  }
+
+  /** Can this channel's login time viewers out? null if unknown (not linked, Kick didn't say). */
+  async canModerate(channelId: number): Promise<boolean | null> {
+    if (!this.linked(channelId)) return false;
+    const scopes = await this.scopes(channelId);
+    return scopes === null ? null : scopes.split(/\s+/).includes(MODERATION_SCOPE);
+  }
+
+  /**
+   * Time a viewer out on Kick (1 minute to 7 days), with the streamer's own login: as the broadcaster,
+   * so clipQ's bot doesn't need to be a mod. Returns null when done, otherwise why not.
+   */
+  timeout(channelId: number, userId: number, minutes: number, reason: string): Promise<string | null> {
+    const duration = Math.min(MAX_TIMEOUT_MINUTES, Math.max(1, Math.round(minutes)));
+    return this.moderate(channelId, "POST", { broadcaster_user_id: channelId, user_id: userId, duration, reason: reason.slice(0, 100) });
+  }
+
+  /** Lift a viewer's timeout (or ban: callers make sure it's a timeout). Returns null when done, otherwise why not. */
+  untimeout(channelId: number, userId: number): Promise<string | null> {
+    return this.moderate(channelId, "DELETE", { broadcaster_user_id: channelId, user_id: userId });
+  }
+
+  /** A Kick user's id from their name, through their channel (a channel's slug is its owner's name). */
+  async userId(channelId: number, username: string): Promise<number | null> {
+    const slug = username.trim().replace(/^@/, "").toLowerCase().replace(/_/g, "-");
+    if (!/^[a-z0-9-]{1,25}$/.test(slug)) return null;
+    const token = await this.token(channelId, false).catch(() => null);
+    if (!token) return null;
+    try {
+      const res = await fetch(`${CHANNELS}?slug=${encodeURIComponent(slug)}`, {
+        headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) return null;
+      const body = (await res.json()) as { data?: { broadcaster_user_id?: number; slug?: string }[] };
+      const id = body.data?.find((c) => c.slug?.toLowerCase() === slug)?.broadcaster_user_id;
+      return typeof id === "number" ? id : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async moderate(channelId: number, method: "POST" | "DELETE", body: object): Promise<string | null> {
+    if (!this.linked(channelId)) return this.oauth ? NEEDS_MODERATION : "Kick login isn't configured.";
+    const call = (token: string) =>
+      fetch(BANS, {
+        method,
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(10_000),
+      });
+    try {
+      let token = await this.token(channelId, false);
+      if (!token) return NEEDS_MODERATION;
+      let res = await call(token);
+      if (res.status === 401) {
+        token = await this.token(channelId, true);
+        if (!token) return NEEDS_MODERATION;
+        res = await call(token);
+      }
+      if (res.ok) return null;
+      const text = (await res.text()).slice(0, 300);
+      this.log.warn(`bot: Kick refused ${method === "POST" ? "the timeout" : "the untimeout"} (${res.status}): ${text}`);
+      // Usually a login from before clipQ asked for moderation.
+      if ((res.status === 401 || res.status === 403) && (await this.canModerate(channelId)) === false) return NEEDS_MODERATION;
+      const message = /"message"\s*:\s*"([^"]*)"/.exec(text)?.[1];
+      return `Kick refused it (${res.status}${message ? `: ${message}` : ""}).`;
+    } catch (err) {
+      this.log.warn(`bot: moderation failed: ${String(err)}`);
+      return "Couldn't reach Kick.";
     }
   }
 

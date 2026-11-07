@@ -9,7 +9,14 @@ import { fetchSubscriberBadges, lookupChannel } from "./kick/api.js";
 import type { KickBot } from "./kick/bot.js";
 import type { KickChat } from "./kick/chat.js";
 import { authorizeUrl, createPkce, exchangeCode, fetchMe, fetchUser, VIEWER_SCOPES } from "./kick/oauth.js";
-import { MAX_TIMEOUT_MS, settingsSchema, songSettingsSchema, type QueueService, type RejectReason } from "./queue/service.js";
+import {
+  MAX_TIMEOUT_MS,
+  rewardSettingsSchema,
+  settingsSchema,
+  songSettingsSchema,
+  type QueueService,
+  type RejectReason,
+} from "./queue/service.js";
 import type { Session, Sessions, ViewerSessions } from "./sessions.js";
 import { rejectText } from "./songs/commands.js";
 import { overlayKeyValid, overlayUrl } from "./overlays/keys.js";
@@ -234,7 +241,9 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
       ifCurrent: z.number().int().optional(),
     })
     .default({});
-  const settingsBody = settingsSchema.partial().extend({ songs: songSettingsSchema.partial().optional() });
+  const settingsBody = settingsSchema
+    .partial()
+    .extend({ songs: songSettingsSchema.partial().optional(), rewards: rewardSettingsSchema.partial().optional() });
 
   /** Advance a list, unless `ifCurrent` says the caller is reacting to something already gone. */
   const advance = (channelId: number, b: z.output<typeof nextBody>) => {
@@ -280,9 +289,14 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
   action("/api/queue/remove", idBody, (id, b) => queues.remove(id, b.id));
   action("/api/queue/move", moveBody, (id, b) => queues.move(id, b.id, b.index));
   action("/api/queue/clear", kindBody, (id, b) => queues.clear(id, b.kind));
-  action("/api/settings", settingsBody, (id, { songs, ...rest }) =>
-    queues.updateSettings(id, songs ? { ...rest, songs: { ...queues.settings(id).songs, ...songs } } : rest),
-  );
+  action("/api/settings", settingsBody, (id, { songs, rewards, ...rest }) => {
+    const now = queues.settings(id);
+    queues.updateSettings(id, {
+      ...rest,
+      ...(songs && { songs: { ...now.songs, ...songs } }),
+      ...(rewards && { rewards: { ...now.rewards, ...rewards } }),
+    });
+  });
   const banBody = z.object({
     username: z.string().trim().min(1).max(64),
     /** null = permanent */
@@ -305,6 +319,13 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
     const error = await bot.send(id, "clipQ bot is connected. Type !cq commands to see the commands.");
     const scopes = error ? await bot.scopes(id) : null;
     return { ok: error === null, error, scopes };
+  });
+
+  // Whether the timeout rewards can work: the streamer's login has to allow moderation.
+  app.get("/api/rewards/check", async (req, reply) => {
+    const id = authed(req, reply);
+    if (id === null) return reply;
+    return { canModerate: await bot.canModerate(id) };
   });
 
   // ---- public song page (/s/<channel>): anyone can look, logged-in viewers manage their own songs ----

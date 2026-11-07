@@ -74,9 +74,27 @@ export interface SongSettings {
   access: AccessGroup[];
   /** Where songs play: the dashboard's Songs tab, or the OBS browser-source page. */
   player: "dashboard" | "obs";
-  /** Kick channel point reward (its title, any case) that moves the redeemer's next song to the top. Empty = off. */
-  priorityReward: string;
 }
+
+/** Kick channel point rewards clipQ acts on, each matched by its title (any case). Empty = off. */
+export interface RewardSettings {
+  /** Moves the redeemer's next waiting song to the top. */
+  songToTop: string;
+  /** Times out the viewer named in the redeemer's text, on Kick. */
+  timeout: string;
+  /** Removes the timeout of the viewer named in the redeemer's text (never a permanent ban). */
+  untimeout: string;
+  /** How long the timeout reward lasts. Kick allows 1 minute to 7 days. */
+  timeoutMinutes: number;
+}
+
+export const DEFAULT_REWARD_SETTINGS: RewardSettings = {
+  // For now; streamers can name their own reward in Settings (empty turns it off).
+  songToTop: "ping",
+  timeout: "Timeout 10 min",
+  untimeout: "UnTimeout",
+  timeoutMinutes: 10,
+};
 
 export const DEFAULT_SONG_SETTINGS: SongSettings = {
   open: false,
@@ -87,8 +105,6 @@ export const DEFAULT_SONG_SETTINGS: SongSettings = {
   requestCooldown: 120,
   access: ["everyone"],
   player: "dashboard",
-  // For now; streamers can name their own reward in Settings (empty turns it off).
-  priorityReward: "ping",
 };
 
 export interface QueueSettings {
@@ -110,6 +126,7 @@ export interface QueueSettings {
   /** Even out loudness: Kick clips leveled as they play, quiet YouTube videos turned up (YouTube turns loud ones down). */
   normalize: boolean;
   songs: SongSettings;
+  rewards: RewardSettings;
 }
 
 export const DEFAULT_SETTINGS: QueueSettings = {
@@ -123,6 +140,7 @@ export const DEFAULT_SETTINGS: QueueSettings = {
   volume: 60,
   normalize: true,
   songs: DEFAULT_SONG_SETTINGS,
+  rewards: DEFAULT_REWARD_SETTINGS,
 };
 
 /** A viewer whose links clipQ ignores, until `until` (ms) or for good when null. */

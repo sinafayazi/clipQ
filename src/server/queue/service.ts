@@ -33,7 +33,14 @@ export const songSettingsSchema = z.object({
   requestCooldown: z.number().int().min(0).max(3600),
   access: z.array(z.enum(ACCESS_GROUPS)).min(1),
   player: z.enum(["dashboard", "obs"]),
-  priorityReward: z.string().trim().max(100),
+});
+
+const rewardTitle = z.string().trim().max(100);
+export const rewardSettingsSchema = z.object({
+  songToTop: rewardTitle,
+  timeout: rewardTitle,
+  untimeout: rewardTitle,
+  timeoutMinutes: z.number().int().min(1).max(7 * 24 * 60),
 });
 
 export const settingsSchema = z.object({
@@ -47,6 +54,7 @@ export const settingsSchema = z.object({
   volume: z.number().int().min(0).max(100),
   normalize: z.boolean(),
   songs: songSettingsSchema,
+  rewards: rewardSettingsSchema,
 });
 
 /** How songs are looked up, and the OBS page link for a channel (it carries a secret key). */
@@ -971,7 +979,15 @@ function readSettings(json: string): QueueSettings {
     stored = JSON.parse(json);
   } catch {}
   const saved = (typeof stored === "object" && stored ? stored : {}) as Partial<QueueSettings>;
-  const merged = { ...DEFAULT_SETTINGS, ...saved, songs: { ...DEFAULT_SETTINGS.songs, ...saved.songs } };
+  const merged = {
+    ...DEFAULT_SETTINGS,
+    ...saved,
+    songs: { ...DEFAULT_SETTINGS.songs, ...saved.songs },
+    rewards: { ...DEFAULT_SETTINGS.rewards, ...saved.rewards },
+  };
+  // The song-to-the-top reward used to live with the song settings.
+  const oldReward = (saved.songs as { priorityReward?: unknown } | undefined)?.priorityReward;
+  if (saved.rewards === undefined && typeof oldReward === "string") merged.rewards.songToTop = oldReward;
   // Songs used to have their own volume and normalize switch; now one of each covers clips and songs.
   const oldSongs = saved.songs as { volume?: number; normalize?: boolean } | undefined;
   if (saved.volume === undefined && oldSongs?.volume !== undefined) merged.volume = oldSongs.volume;

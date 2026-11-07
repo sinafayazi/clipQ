@@ -115,8 +115,23 @@ describe("KickChat", () => {
     connect(sockets[0]!);
     sockets[0]!.frame("App\\Events\\MessageDeletedEvent", { id: "d1", message: { id: "abc" } }, "chatrooms.42.v2");
     sockets[0]!.frame("App\\Events\\UserBannedEvent", { id: "b1", user: { id: 7, username: "x" } }, "chatrooms.42.v2");
+    const timeout = { id: "b2", user: { id: 8 }, permanent: false, duration: 10, expires_at: "2030-01-01T00:10:00+00:00" };
+    sockets[0]!.frame("App\\Events\\UserBannedEvent", timeout, "chatrooms.42.v2");
     expect(deleted).toEqual([{ chatroomId: 42, messageId: "abc" }]);
-    expect(banned).toEqual([{ chatroomId: 42, userId: 7 }]);
+    expect(banned).toEqual([
+      { chatroomId: 42, userId: 7, until: null }, // no "permanent": false, so treated as a ban for good
+      { chatroomId: 42, userId: 8, until: Date.parse("2030-01-01T00:10:00Z") },
+    ]);
+  });
+
+  it("emits unbans", () => {
+    const unbanned: unknown[] = [];
+    chat.on("unbanned", (e) => unbanned.push(e));
+    chat.join(42);
+    chat.start();
+    connect(sockets[0]!);
+    sockets[0]!.frame("App\\Events\\UserUnbannedEvent", { id: "u1", user: { id: 8 }, permanent: false }, "chatrooms.42.v2");
+    expect(unbanned).toEqual([{ chatroomId: 42, userId: 8 }]);
   });
 
   it("emits channel point redemptions, each one (Kick gives them no id)", () => {

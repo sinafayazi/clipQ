@@ -7,7 +7,8 @@ const AUTHORIZE = "https://id.kick.com/oauth/authorize";
 const TOKEN = "https://id.kick.com/oauth/token";
 const API = "https://api.kick.com/public/v1";
 // chat:write lets clipQ's bot reply in the streamer's chat (vote counts, the command list).
-export const STREAMER_SCOPES = "user:read channel:read chat:write";
+// moderation:ban lets the timeout and untimeout channel point rewards act on Kick.
+export const STREAMER_SCOPES = "user:read channel:read chat:write moderation:ban";
 /** Viewers logging in on a song page: just who they are. */
 export const VIEWER_SCOPES = "user:read";
 

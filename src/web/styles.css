@@ -1201,6 +1201,10 @@ html[data-theme="songs"] .switch input:checked + .switch-ui {
   font-size: 0.875rem;
 }
 
+.dialog .settings-warn {
+  color: var(--color-danger-text);
+}
+
 .settings-hint code {
   font-size: 0.85em;
   padding: 0.05em 0.35em;

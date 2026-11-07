@@ -19,11 +19,25 @@ export interface ChatEvents {
   message: [ChatMessage];
   /** A moderator deleted a message. */
   deleted: [{ chatroomId: number; messageId: string }];
-  /** A user was banned or timed out. */
-  banned: [{ chatroomId: number; userId: number }];
+  /** A user was banned (`until` null) or timed out until `until` (ms). */
+  banned: [{ chatroomId: number; userId: number; until: number | null }];
+  /** A user's ban or timeout was lifted. */
+  unbanned: [{ chatroomId: number; userId: number }];
   /** A viewer redeemed a channel point reward. */
   redeemed: [{ chatroomId: number; title: string; userId: number; username: string; input: string }];
   status: [boolean];
+}
+
+/**
+ * When a ban ends (ms), null for good. Kick sends {"permanent":false,"duration":10,"expires_at":"…"}
+ * for a timeout (duration in minutes). Anything unclear counts as permanent.
+ */
+function banUntil(data: { permanent?: unknown; duration?: unknown; expires_at?: unknown }): number | null {
+  if (data.permanent !== false) return null;
+  const at = typeof data.expires_at === "string" ? Date.parse(data.expires_at) : NaN;
+  if (Number.isFinite(at)) return at;
+  const minutes = Number(data.duration);
+  return minutes > 0 ? Date.now() + minutes * 60_000 : null;
 }
 
 export interface KickChatOptions {
@@ -186,7 +200,14 @@ export class KickChat extends EventEmitter<ChatEvents> {
         const userId = data.user?.id;
         if (typeof userId !== "number") return;
         if (!this.recentIds.add(`b:${data.id ?? userId}:${userId}`)) return;
-        this.emit("banned", { chatroomId, userId });
+        this.emit("banned", { chatroomId, userId, until: banUntil(data) });
+        return;
+      }
+      case "App\\Events\\UserUnbannedEvent": {
+        const userId = data.user?.id;
+        if (typeof userId !== "number") return;
+        if (!this.recentIds.add(`u:${data.id ?? userId}:${userId}`)) return;
+        this.emit("unbanned", { chatroomId, userId });
         return;
       }
       // Arrives on chatroom_<id> only, with no id of its own: two redemptions in a row look the same, so no dedupe.

@@ -503,8 +503,9 @@ describe("song requests", () => {
     const fresh = new QueueService(openDb(":memory:"), resolver);
     fresh.upsertChannel({ id: 1, slug: "a", displayName: "A", chatroomId: 1 }, 1);
     expect(fresh.settings(1).songs).toEqual({
-      open: false, maxSize: 50, perUserLimit: 2, maxDuration: 600, voteSkip: 10, requestCooldown: 120, access: ["everyone"], player: "dashboard", priorityReward: "ping",
+      open: false, maxSize: 50, perUserLimit: 2, maxDuration: 600, voteSkip: 10, requestCooldown: 120, access: ["everyone"], player: "dashboard",
     });
+    expect(fresh.settings(1).rewards).toEqual({ songToTop: "ping", timeout: "Timeout 10 min", untimeout: "UnTimeout", timeoutMinutes: 10 });
     // One volume and one normalize switch for clips and songs.
     expect(fresh.settings(1)).toMatchObject({ volume: 60, normalize: true });
   });
@@ -516,6 +517,18 @@ describe("song requests", () => {
     db.prepare(`UPDATE channels SET settings = ? WHERE id = 1`).run(JSON.stringify({ songs: { volume: 35, normalize: false } }));
     expect(fresh.settings(1)).toMatchObject({ volume: 35, normalize: false });
     expect(fresh.settings(1).songs).not.toHaveProperty("volume");
+  });
+
+  it("keeps the old song-to-the-top reward name in the channel points settings", () => {
+    const db = openDb(":memory:");
+    const fresh = new QueueService(db, resolver);
+    fresh.upsertChannel({ id: 1, slug: "a", displayName: "A", chatroomId: 1 }, 1);
+    db.prepare(`UPDATE channels SET settings = ? WHERE id = 1`).run(JSON.stringify({ songs: { priorityReward: "Hydrate" } }));
+    expect(fresh.settings(1).rewards.songToTop).toBe("Hydrate");
+    expect(fresh.settings(1).songs).not.toHaveProperty("priorityReward");
+    // Once saved in the new place, the new place wins.
+    fresh.updateSettings(1, { rewards: { ...fresh.settings(1).rewards, songToTop: "" } });
+    expect(fresh.settings(1).rewards.songToTop).toBe("");
   });
 
   it("the first song starts right away; the rest wait in order; clips are untouched", async () => {

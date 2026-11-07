@@ -4,6 +4,7 @@ import { findClips } from "./clips/parse.js";
 import type { KickBot } from "./kick/bot.js";
 import type { ChatMessage, KickChat } from "./kick/chat.js";
 import { MAX_TIMEOUT_MS, type QueueService } from "./queue/service.js";
+import { channelRewards } from "./rewards.js";
 import { adjust, songCommands, votesText } from "./songs/commands.js";
 
 /** Most links taken from one message; the per-user limit usually cuts it lower. */
@@ -46,6 +47,7 @@ export function bridgeChat(
 ) {
   const voteReply = new Map<string, { timer: NodeJS.Timeout; text: string }>();
   const lastHelp = new Map<number, number>();
+  const rewards = channelRewards({ queues, bot, log, superUsers });
   const songs = songCommands({ queues, bot, log, publicUrl, vote: (id, msg) => vote(id, msg, "songs") });
 
   chat.on("message", (msg) => {
@@ -57,25 +59,22 @@ export function bridgeChat(
     if (channel) queues.removeByMessage(channel.id, messageId);
   });
 
-  chat.on("banned", ({ chatroomId, userId }) => {
-    const channel = queues.channelByChatroom(chatroomId);
-    if (channel) queues.removeByUser(channel.id, userId);
-  });
-
-  // The channel's "song to the top" reward: the redeemer's next waiting song jumps the line.
-  chat.on("redeemed", ({ chatroomId, title, userId, username }) => {
+  chat.on("banned", ({ chatroomId, userId, until }) => {
     const channel = queues.channelByChatroom(chatroomId);
     if (!channel) return;
-    const reward = queues.settings(channel.id).songs.priorityReward.trim().toLowerCase();
-    if (!reward || title.trim().toLowerCase() !== reward) return;
-    const song = queues.prioritizeSong(channel.id, userId);
-    log.info({ channel: channel.slug, user: username, reward: title, moved: song?.id ?? null }, "priority reward redeemed");
-    void bot.say(
-      channel.id,
-      song
-        ? `@${username} "${song.title ?? "your song"}" is next up.`
-        : `@${username} you have no song waiting. Request one with !sr first, then redeem it.`,
-    );
+    queues.removeByUser(channel.id, userId);
+    rewards.banned(channel.id, userId, until);
+  });
+
+  chat.on("unbanned", ({ chatroomId, userId }) => {
+    const channel = queues.channelByChatroom(chatroomId);
+    if (channel) rewards.unbanned(channel.id, userId);
+  });
+
+  // Channel point rewards the streamer set up: song to the top, timeout, untimeout.
+  chat.on("redeemed", ({ chatroomId, ...redemption }) => {
+    const channel = queues.channelByChatroom(chatroomId);
+    if (channel) rewards.redeemed(channel, redemption).catch((err) => log.error({ err }, "reward handling failed"));
   });
 
   // Dashboards show the chat connection, so push fresh state to all of them.
@@ -88,6 +87,7 @@ export function bridgeChat(
     if (!channel) return;
     // Kick's own badge, before super users get theirs: lets Kick mods reorder songs on the song page.
     queues.noteChatRole(channel.id, raw.sender.id, raw.sender.username, raw.sender.badges.includes("moderator"));
+    rewards.sawChatter(channel.id, raw.sender.id, raw.sender.username);
     // Super users act as the broadcaster everywhere, so every permission check lets them through.
     const msg = superUsers.has(raw.sender.username.toLowerCase())
       ? { ...raw, sender: { ...raw.sender, badges: [...raw.sender.badges, "broadcaster"] } }
