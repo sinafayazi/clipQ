@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Help · clipQ chat commands</title>
+    <meta
+      name="description"
+      content="Chat commands for clipQ: queue clips with a link or !cq, request songs with !sr, and run the queue from Kick chat."
+    />
+    <link rel="canonical" href="__SITE_URL__/help/" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="clipQ" />
+    <meta property="og:title" content="Help · clipQ chat commands" />
+    <meta property="og:description" content="Every !cq and !sr command for clips and song requests." />
+    <meta property="og:url" content="__SITE_URL__/help/" />
+    <meta property="og:image" content="__SITE_URL__/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Help · clipQ chat commands" />
+    <meta name="twitter:description" content="Every !cq and !sr command for clips and song requests." />
+    <meta name="twitter:image" content="__SITE_URL__/og.png" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="../landing.css" />
+    <link rel="stylesheet" href="./help.css" />
+    <script type="module" src="../landing-lava.ts"></script>
+    <script type="module" src="./help-motion.ts"></script>
+  </head>
+  <body class="help-page">
+    <a class="skip" href="#main">Skip to content</a>
+    <div class="help-progress" aria-hidden="true"><span data-progress></span></div>
+
+    <header class="site-header">
+      <div class="wrap">
+        <a class="logo" href="/"><span class="tally" aria-hidden="true"></span>clipQ</a>
+        <nav class="header-actions" aria-label="Account">
+          <a class="header-link" href="/help/" aria-current="page">Help</a>
+          <a class="header-login" href="/app/">Log in</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="help-hero">
+        <div id="hero-lava" class="hero-lava" aria-hidden="true"></div>
+        <div class="wrap help-hero-copy">
+          <h1 class="help-title" data-split aria-label="Commands">Commands</h1>
+          <p class="lede help-lede" data-hero-item>
+            Type these in Kick chat. Clips queue from a pasted link;<br />
+            songs use <code>!sr</code>. Mods steer both queues with <code>!cq</code> and <code>!sr</code>.
+          </p>
+        </div>
+      </section>
+
+      <nav class="help-rail wrap" data-rail aria-label="Sections">
+        <a href="#clips" data-rail-link="clips">Clips</a>
+        <a href="#songs" data-rail-link="songs">Songs</a>
+        <span class="help-rail-hint" data-copy-hint>Click a command to copy</span>
+      </nav>
+
+      <section id="clips" class="help-section" data-section="clips">
+        <div class="wrap help-section-grid">
+          <header class="help-section-head" data-reveal>
+            <h2>Clips</h2>
+            <p>Paste a Kick, YouTube, Twitch, TikTok, Instagram, X, or Streamable link to queue it.</p>
+          </header>
+
+          <div class="help-block" data-reveal>
+            <h3>Anyone</h3>
+            <ul class="help-cmds" data-stagger>
+              <li>
+                <div class="help-cmd help-cmd-static">
+                  <code class="help-cmd-code">clip link</code>
+                  <span class="help-cmd-who">chat</span>
+                  <span class="help-cmd-desc">Paste a supported clip URL to add it to the queue</span>
+                </div>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!cvs">
+                  <code class="help-cmd-code">!cvs</code>
+                  <span class="help-cmd-who">chat</span>
+                  <span class="help-cmd-desc">Vote to skip the playing clip</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!cq commands">
+                  <code class="help-cmd-code">!cq commands</code>
+                  <span class="help-cmd-who">chat</span>
+                  <span class="help-cmd-desc">Ask the bot to post this list in chat</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!volume">
+                  <code class="help-cmd-code">!volume</code>
+                  <span class="help-cmd-who">chat</span>
+                  <span class="help-cmd-desc">Show the current volume for clips and songs</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <div class="help-block" data-reveal>
+            <h3>Mods &amp; broadcaster</h3>
+            <p class="help-alias">Also works as <code>!clipq</code>.</p>
+            <ul class="help-cmds" data-stagger>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!cq open">
+                  <code class="help-cmd-code">!cq open</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Start taking clips from chat</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!cq close">
+                  <code class="help-cmd-code">!cq close</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Stop taking new clips</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!cq play">
+                  <code class="help-cmd-code">!cq play</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Resume the clip player</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!cq pause">
+                  <code class="help-cmd-code">!cq pause</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Pause the clip player</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!cq next">
+                  <code class="help-cmd-code">!cq next</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Play the next clip</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!cq skip">
+                  <code class="help-cmd-code">!cq skip</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Skip the current clip</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!cq prev">
+                  <code class="help-cmd-code">!cq prev</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Replay the previous clip</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!cq clear">
+                  <code class="help-cmd-code">!cq clear</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Empty the clip queue</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!cq ban">
+                  <code class="help-cmd-code">!cq ban &lt;user&gt;</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Ignore that viewer’s links until unbanned</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!cq unban">
+                  <code class="help-cmd-code">!cq unban &lt;user&gt;</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Allow that viewer’s links again</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!cq timeout">
+                  <code class="help-cmd-code">!cq timeout &lt;user&gt; [10m]</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Ignore their links for a while (default 10 minutes)</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!cq votes">
+                  <code class="help-cmd-code">!cq votes &lt;n&gt;</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Votes needed to skip a clip; <code>0</code> turns vote skip off</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!cq volume">
+                  <code class="help-cmd-code">!cq volume &lt;0-100&gt;</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Set volume, or nudge with <code>+10</code> / <code>-10</code></span>
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="songs" class="help-section" data-section="songs">
+        <div class="wrap help-section-grid">
+          <header class="help-section-head" data-reveal>
+            <h2>Songs</h2>
+            <p>Request YouTube or Spotify tracks. Viewers manage their own requests; mods run the song queue.</p>
+          </header>
+
+          <div class="help-block" data-reveal>
+            <h3>Anyone</h3>
+            <ul class="help-cmds" data-stagger>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!sr ">
+                  <code class="help-cmd-code">!sr &lt;link or name&gt;</code>
+                  <span class="help-cmd-who">chat</span>
+                  <span class="help-cmd-desc">Request a song by link or search</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!song">
+                  <code class="help-cmd-code">!song</code>
+                  <span class="help-cmd-who">chat</span>
+                  <span class="help-cmd-desc">What’s playing now (<code>!np</code>, <code>!when</code>)</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!mysong">
+                  <code class="help-cmd-code">!mysong</code>
+                  <span class="help-cmd-who">chat</span>
+                  <span class="help-cmd-desc">Your next song and when it plays</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!wrongsong">
+                  <code class="help-cmd-code">!wrongsong</code>
+                  <span class="help-cmd-who">chat</span>
+                  <span class="help-cmd-desc">Remove your last request</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!songs">
+                  <code class="help-cmd-code">!songs</code>
+                  <span class="help-cmd-who">chat</span>
+                  <span class="help-cmd-desc">How many are waiting, plus the song page link</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!vs">
+                  <code class="help-cmd-code">!vs</code>
+                  <span class="help-cmd-who">chat</span>
+                  <span class="help-cmd-desc">Vote to skip the playing song (<code>!voteskip</code>)</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <div class="help-block" data-reveal>
+            <h3>Mods &amp; broadcaster</h3>
+            <p class="help-alias">Same actions work as <code>!songs …</code>.</p>
+            <ul class="help-cmds" data-stagger>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!sr open">
+                  <code class="help-cmd-code">!sr open</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Open song requests</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!sr close">
+                  <code class="help-cmd-code">!sr close</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Close song requests</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!sr play">
+                  <code class="help-cmd-code">!sr play</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Resume the song player</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!sr pause">
+                  <code class="help-cmd-code">!sr pause</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Pause the song player</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!sr skip">
+                  <code class="help-cmd-code">!sr skip</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Skip the current song (<code>!sr next</code>)</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!sr prev">
+                  <code class="help-cmd-code">!sr prev</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Play the previous song</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!sr clear">
+                  <code class="help-cmd-code">!sr clear</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Empty the song queue</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!sr remove">
+                  <code class="help-cmd-code">!sr remove &lt;user&gt;</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Remove that viewer’s pending songs</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!sr votes">
+                  <code class="help-cmd-code">!sr votes &lt;n&gt;</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Votes needed to skip a song; <code>0</code> turns it off</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="help-cmd" data-copy="!volume ">
+                  <code class="help-cmd-code">!volume &lt;0-100&gt;</code>
+                  <span class="help-cmd-who">mod</span>
+                  <span class="help-cmd-desc">Set volume for clips and songs (<code>+10</code> / <code>-10</code>)</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="help-final" data-reveal>
+        <div class="wrap">
+          <h2>Ready to run the queue?</h2>
+          <p>Log in with Kick and open clips or songs from the dashboard.</p>
+          <div class="cta-row">
+            <a class="rich-btn rich-btn-red rich-btn-lg" href="/app/">Log in with Kick</a>
+            <a class="rich-btn rich-btn-zinc rich-btn-lg" href="/">Back home</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div id="footer-lava" class="footer-lava" aria-hidden="true"></div>
+      <div class="wrap site-footer-inner">
+        <a class="logo" href="/"><span class="tally" aria-hidden="true"></span>clipQ</a>
+        <nav aria-label="Footer">
+          <a href="/help/">Help</a>
+          <a href="https://nowpayments.io/donation/sina" target="_blank" rel="noopener">Donate</a>
+          <a href="https://github.com/sinafayazi/clipQ" target="_blank" rel="noopener">Source</a>
+          <a href="/fa/" hreflang="fa" lang="fa">فارسی</a>
+        </nav>
+      </div>
+    </footer>
+
+    <div class="help-toast" data-toast hidden>Copied</div>
+  </body>
+</html>

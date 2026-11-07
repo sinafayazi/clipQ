@@ -4,14 +4,18 @@ export type ChatFadeIn = "fade" | "slide" | "pop" | "none";
 export type ChatPreviewSource = "fake" | "live";
 export type ChatFontPreset = "jakarta" | "source" | "bricolage" | "inter" | "rubik" | "system";
 export type ChatFont = ChatFontPreset | "custom";
-/** Message composition for the OBS chat overlay. `classic` is the original inline look. */
-export type ChatLayout = "classic" | "cards" | "portraits" | "stack" | "stripe";
+/** How each message is composed (name / body / avatar arrangement). */
+export type ChatLayout = "classic" | "stack" | "portraits" | "bubble" | "comic";
+/** Chrome around each message — orthogonal to layout. */
+export type ChatBgStyle = "none" | "plate" | "stripe" | "glass" | "outline" | "tint";
 
 export interface ChatOverlaySettings {
   /** Preview-only: inject sample messages instead of Kick chat. */
   preview: ChatPreviewSource;
   /** How each message is composed on the overlay. */
   layout: ChatLayout;
+  /** Fill / edge treatment on each message. */
+  bgStyle: ChatBgStyle;
   font: ChatFont;
   /** Pasted Google Fonts CSS / specimen / share URL (hub field only). */
   googleFontLink: string;
@@ -24,7 +28,7 @@ export interface ChatOverlaySettings {
   /** How long a message stays before fading out (ms). */
   fadeOutMs: number;
   fadeIn: ChatFadeIn;
-  /** Panel / plate color (hex). Used by the full chat panel and card-style plates. */
+  /** Panel / plate color (hex). Used by the full chat panel and message plates. */
   bgColor: string;
   /** Panel opacity 0–100. 0 = fully transparent for OBS. */
   bgOpacity: number;
@@ -38,6 +42,7 @@ export interface ChatOverlaySettings {
 export const DEFAULT_CHAT_SETTINGS: ChatOverlaySettings = {
   preview: "fake",
   layout: "classic",
+  bgStyle: "none",
   font: "jakarta",
   googleFontLink: "",
   googleFontFamily: "",
@@ -45,7 +50,7 @@ export const DEFAULT_CHAT_SETTINGS: ChatOverlaySettings = {
   fontWeight: 600,
   fadeOutMs: 35_000,
   fadeIn: "fade",
-  bgColor: "#000000",
+  bgColor: "#2a2a2a",
   bgOpacity: 0,
   showPfp: true,
   messageGap: 8,
@@ -53,14 +58,34 @@ export const DEFAULT_CHAT_SETTINGS: ChatOverlaySettings = {
 };
 
 export const LAYOUT_OPTIONS: { id: ChatLayout; label: string; hint: string }[] = [
-  { id: "classic", label: "Classic", hint: "Inline badges and name — the current look." },
-  { id: "cards", label: "Cards", hint: "Each line sits on its own dark plate." },
-  { id: "portraits", label: "Portraits", hint: "Large avatar beside name and message." },
+  { id: "classic", label: "Classic", hint: "Inline badges and name — the original look." },
   { id: "stack", label: "Stack", hint: "Name on top, message underneath." },
+  { id: "portraits", label: "Portraits", hint: "Large avatar beside name and message." },
+  { id: "bubble", label: "Bubble", hint: "Name above the text in a speech shape." },
+  { id: "comic", label: "Comic", hint: "Name chip with a bold comic balloon." },
+];
+
+export const BG_STYLE_OPTIONS: { id: ChatBgStyle; label: string; hint: string }[] = [
+  { id: "none", label: "None", hint: "No plate — text shadow only, best for busy scenes." },
+  { id: "plate", label: "Plate", hint: "Soft filled card behind each message." },
   { id: "stripe", label: "Stripe", hint: "User-color edge on a soft plate." },
+  { id: "glass", label: "Glass", hint: "Frosted translucent plate." },
+  { id: "outline", label: "Outline", hint: "User-color frame, light fill." },
+  { id: "tint", label: "Tint", hint: "Wash of the chatter’s name color." },
 ];
 
 const LAYOUT_IDS = new Set<string>(LAYOUT_OPTIONS.map((l) => l.id));
+const BG_STYLE_IDS = new Set<string>(BG_STYLE_OPTIONS.map((s) => s.id));
+
+/** Older single-select layouts that encoded a background style. */
+const LEGACY_LAYOUT: Record<string, { layout: ChatLayout; bgStyle: ChatBgStyle }> = {
+  cards: { layout: "classic", bgStyle: "plate" },
+  stripe: { layout: "classic", bgStyle: "stripe" },
+  outline: { layout: "classic", bgStyle: "outline" },
+  compact: { layout: "classic", bgStyle: "none" },
+  bar: { layout: "classic", bgStyle: "plate" },
+  broadcast: { layout: "classic", bgStyle: "none" },
+};
 
 export const FADE_IN_OPTIONS: { id: ChatFadeIn; label: string }[] = [
   { id: "fade", label: "Fade" },
@@ -135,7 +160,31 @@ export function parseFont(raw: string | null): ChatFont {
 
 export function parseLayout(raw: string | null): ChatLayout {
   if (raw && LAYOUT_IDS.has(raw)) return raw as ChatLayout;
+  if (raw && LEGACY_LAYOUT[raw]) return LEGACY_LAYOUT[raw]!.layout;
   return DEFAULT_CHAT_SETTINGS.layout;
+}
+
+export function parseBgStyle(raw: string | null | undefined): ChatBgStyle {
+  if (raw && BG_STYLE_IDS.has(raw)) return raw as ChatBgStyle;
+  return DEFAULT_CHAT_SETTINGS.bgStyle;
+}
+
+/** Resolve layout + message background, including legacy combined layout ids. */
+export function resolveLayoutPair(
+  layoutRaw: string | null | undefined,
+  bgStyleRaw: string | null | undefined,
+): { layout: ChatLayout; bgStyle: ChatBgStyle } {
+  const legacy = layoutRaw ? LEGACY_LAYOUT[layoutRaw] : undefined;
+  if (legacy) {
+    if (bgStyleRaw && BG_STYLE_IDS.has(bgStyleRaw)) {
+      return { layout: legacy.layout, bgStyle: bgStyleRaw as ChatBgStyle };
+    }
+    return { ...legacy };
+  }
+  return {
+    layout: parseLayout(layoutRaw ?? null),
+    bgStyle: parseBgStyle(bgStyleRaw),
+  };
 }
 
 /** Query/UI flag: default on. `0` / `false` / `off` disable. */
@@ -246,6 +295,7 @@ export function chatObsQuery(settings: ChatOverlaySettings): string {
   const bgColor = sanitizeBgColor(settings.bgColor);
   if (bgColor !== DEFAULT_CHAT_SETTINGS.bgColor) q.set("bgc", bgColor.slice(1));
   if (settings.layout !== DEFAULT_CHAT_SETTINGS.layout) q.set("layout", settings.layout);
+  if (settings.bgStyle !== DEFAULT_CHAT_SETTINGS.bgStyle) q.set("bgstyle", settings.bgStyle);
   if (settings.font === "custom" && settings.googleFontFamily) {
     q.set("font", "custom");
     q.set("ff", settings.googleFontFamily);
@@ -268,7 +318,9 @@ export function chatObsQuery(settings: ChatOverlaySettings): string {
  * Appearance is pushed live via postMessage so the chat does not reset.
  */
 export function chatPreviewShellQuery(preview: ChatPreviewSource): string {
-  return preview === "fake" ? "&demo=1" : "";
+  // Hub preview: transparent start + centered column over the scene image.
+  // Real opacity/look arrives via postMessage. OBS links never use this helper.
+  return preview === "fake" ? "&demo=1&bg=0&preview=1" : "&bg=0&preview=1";
 }
 
 /** Live look updates from the overlays hub → chat iframe. */
@@ -276,6 +328,7 @@ export const CHAT_SETTINGS_MESSAGE = "clipq-chat-settings";
 
 export interface ChatLiveAppearance {
   layout: ChatLayout;
+  bgStyle: ChatBgStyle;
   font: ChatFont;
   googleFontFamily: string;
   fontSize: number;
@@ -290,8 +343,10 @@ export interface ChatLiveAppearance {
 }
 
 export function chatLiveAppearance(settings: ChatOverlaySettings): ChatLiveAppearance {
+  const pair = resolveLayoutPair(settings.layout ?? null, settings.bgStyle ?? null);
   return {
-    layout: parseLayout(settings.layout ?? null),
+    layout: pair.layout,
+    bgStyle: pair.bgStyle,
     font: parseFont(settings.font ?? null),
     googleFontFamily: settings.font === "custom" ? settings.googleFontFamily : "",
     fontSize: settings.fontSize,
@@ -362,9 +417,14 @@ export function loadChatSettings(): ChatOverlaySettings {
     const font = parseFont(saved.font ?? null);
     const googleFontFamily = sanitizeGoogleFontFamily(saved.googleFontFamily);
     const googleFontLink = typeof saved.googleFontLink === "string" ? saved.googleFontLink.slice(0, 500) : "";
+    const pair = resolveLayoutPair(
+      typeof saved.layout === "string" ? saved.layout : null,
+      typeof saved.bgStyle === "string" ? saved.bgStyle : null,
+    );
     return {
       preview: saved.preview === "live" ? "live" : "fake",
-      layout: parseLayout(saved.layout ?? null),
+      layout: pair.layout,
+      bgStyle: pair.bgStyle,
       font: font === "custom" && !googleFontFamily ? DEFAULT_CHAT_SETTINGS.font : font,
       googleFontLink,
       googleFontFamily,

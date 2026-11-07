@@ -1,0 +1,342 @@
+/* Help / chat commands — minimal editorial layout on the landing tokens. */
+
+.help-page {
+  --help-rail-h: 3rem;
+}
+
+.help-progress {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  z-index: 6;
+  height: 2px;
+  pointer-events: none;
+  background: transparent;
+}
+
+.help-progress span {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transform-origin: left center;
+}
+
+/* ---- hero ---- */
+
+.help-hero {
+  position: relative;
+  padding-block: 5.5rem 3rem;
+  min-height: min(72vh, 38rem);
+  display: flex;
+  align-items: flex-end;
+}
+
+.help-hero-copy {
+  position: relative;
+  z-index: 1;
+  padding-block-end: 1rem;
+}
+
+.help-title {
+  font-size: clamp(3.4rem, 12vw, 7.5rem);
+  font-weight: 700;
+  letter-spacing: -0.055em;
+  line-height: 0.92;
+  max-width: 12ch;
+}
+
+.help-title .char {
+  display: inline-block;
+  will-change: transform, opacity;
+}
+
+.help-lede {
+  margin-block-start: 1.35rem;
+  max-width: 36rem;
+  color: var(--text-2);
+  font-size: clamp(1.05rem, 2.2vw, 1.2rem);
+}
+
+.help-lede code {
+  color: var(--text);
+}
+
+/* ---- sticky rail ---- */
+
+.help-rail {
+  position: sticky;
+  top: var(--header-h, 3.75rem);
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1.25rem;
+  min-height: var(--help-rail-h);
+  padding-block: 0.65rem;
+  margin-block-end: 0.5rem;
+  background: rgb(0 0 0 / 0.8);
+  border-block-end: 1px solid var(--border);
+}
+
+.help-rail a {
+  text-decoration: none;
+  color: var(--text-2);
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding-block: 0.35rem;
+  min-height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  transition: color 140ms var(--ease);
+}
+
+.help-rail a.is-active {
+  color: var(--text);
+}
+
+@media (hover: hover) {
+  .help-rail a:hover {
+    color: var(--text);
+  }
+}
+
+.help-rail-hint {
+  margin-inline-start: auto;
+  color: var(--text-2);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 640px) {
+  .help-rail-hint {
+    display: none;
+  }
+}
+
+/* ---- sections ---- */
+
+.help-section {
+  padding-block: 3.5rem 4.5rem;
+  border-block-end: 1px solid var(--border);
+}
+
+.help-section-grid {
+  display: grid;
+  gap: 2.75rem;
+}
+
+.help-section-head h2 {
+  font-size: clamp(2.1rem, 5vw, 3.4rem);
+  margin-block-end: 0.75rem;
+}
+
+.help-section-head p {
+  max-width: 36rem;
+  color: var(--text-2);
+  font-size: 1.05rem;
+}
+
+.help-block h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-block-end: 0.35rem;
+  color: var(--text);
+}
+
+.help-alias {
+  color: var(--text-2);
+  font-size: 0.92rem;
+  margin-block-end: 1.15rem;
+}
+
+.help-alias code {
+  color: var(--text);
+}
+
+.help-cmds {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+
+.help-cmd {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) auto minmax(0, 1.4fr);
+  gap: 0.75rem 1.5rem;
+  align-items: baseline;
+  padding: 1.05rem 0;
+  margin: 0;
+  border: 0;
+  border-block-start: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease), transform 120ms var(--ease);
+}
+
+.help-cmds > li:last-child .help-cmd {
+  border-block-end: 1px solid var(--border);
+}
+
+.help-cmd-code {
+  font-size: clamp(0.98rem, 2.1vw, 1.15rem);
+  font-weight: 500;
+  background: none;
+  padding: 0;
+  color: var(--text);
+  white-space: normal;
+}
+
+.help-cmd-who {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  justify-self: end;
+}
+
+.help-cmd-desc {
+  color: var(--text-2);
+  font-size: 0.98rem;
+  line-height: 1.45;
+}
+
+.help-cmd-desc code {
+  font-size: 0.9em;
+  color: var(--text);
+}
+
+@media (hover: hover) {
+  .help-cmd:hover {
+    background: rgb(255 255 255 / 0.03);
+  }
+
+  .help-cmd:hover .help-cmd-code {
+    color: #fff;
+  }
+}
+
+button.help-cmd:active {
+  transform: scale(0.96);
+}
+
+.help-cmd.is-copied .help-cmd-code {
+  color: var(--kick);
+}
+
+.help-cmd-static {
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .help-cmd-static:hover {
+    background: transparent;
+  }
+
+  .help-cmd-static:hover .help-cmd-code {
+    color: var(--text);
+  }
+}
+
+@media (max-width: 820px) {
+  .help-cmd {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "code who"
+      "desc desc";
+    gap: 0.35rem 1rem;
+    padding-block: 1rem;
+  }
+
+  .help-cmd-code {
+    grid-area: code;
+  }
+
+  .help-cmd-who {
+    grid-area: who;
+  }
+
+  .help-cmd-desc {
+    grid-area: desc;
+  }
+}
+
+/* ---- final ---- */
+
+.help-final {
+  padding-block: 5rem 4rem;
+  text-align: center;
+}
+
+.help-final h2 {
+  font-size: clamp(1.85rem, 4.5vw, 2.75rem);
+  max-width: 16ch;
+  margin-inline: auto;
+  margin-block-end: 0.75rem;
+}
+
+.help-final p {
+  color: var(--text-2);
+  margin-inline: auto;
+  margin-block-end: 1.5rem;
+  max-width: 28rem;
+}
+
+.help-final .cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+/* ---- toast ---- */
+
+.help-toast {
+  position: fixed;
+  inset-inline-start: 50%;
+  bottom: 1.5rem;
+  z-index: 8;
+  transform: translateX(-50%) translateY(0);
+  padding: 0.55rem 0.95rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.help-toast[hidden] {
+  display: none;
+}
+
+/* Motion priming — hide only when JS enables motion */
+.motion-ready .help-title .char,
+.motion-ready [data-hero-item],
+.motion-ready [data-reveal] {
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .help-progress,
+  .header-link,
+  .header-login,
+  .help-rail a,
+  .help-cmd {
+    transition: none;
+  }
+
+  button.help-cmd:active,
+  .header-link:active,
+  .header-login:active {
+    transform: none;
+  }
+}

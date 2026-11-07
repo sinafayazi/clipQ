@@ -814,7 +814,7 @@ html[data-theme="songs"] .switch input:checked + .switch-ui {
   flex-direction: column;
   padding: 1.15rem 1.25rem 1.5rem;
   overflow: auto;
-  background: var(--color-bg-chrome);
+  background: #0a0a0a;
 }
 
 .queue-tools {
@@ -827,7 +827,7 @@ html[data-theme="songs"] .switch input:checked + .switch-ui {
   align-items: center;
   margin: 0 0 0.85rem;
   padding: 0 0.25rem 0.85rem;
-  background: var(--color-bg-chrome);
+  background: #0a0a0a;
 }
 
 .queue-tools .switch {
