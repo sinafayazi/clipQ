@@ -14,7 +14,7 @@ import { registerRoutes } from "./routes.js";
 import { registerSite } from "./site.js";
 import { obsUrl } from "./songs/obs.js";
 import { resolveSong } from "./songs/resolve.js";
-import { Sessions, ViewerSessions } from "./sessions.js";
+import { SESSION_COOKIE, Sessions, VIEWER_COOKIE, ViewerSessions } from "./sessions.js";
 import { TursoSync } from "./sync.js";
 import { createClient } from "@libsql/client";
 
@@ -35,6 +35,30 @@ if (config.turso) {
 const queues = new QueueService(db, resolveClip, Date.now, { resolve: resolveSong, obsUrl });
 const sessions = new Sessions(db);
 const viewers = new ViewerSessions(db);
+
+// Logins: pick up ones made on the old instance during a deploy, and keep active ones from expiring.
+const bootedAt = Date.now();
+const ADOPT_WINDOW_MS = 10 * 60_000;
+const missed = new Set<string>();
+app.addHook("onRequest", async (req, reply) => {
+  const logins = [
+    ["sessions", req.cookies[SESSION_COOKIE]],
+    ["viewer_sessions", req.cookies[VIEWER_COOKIE]],
+  ] as const;
+  if (sync && Date.now() - bootedAt < ADOPT_WINDOW_MS) {
+    for (const [table, id] of logins) {
+      if (!id || missed.has(id) || db.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(id)) continue;
+      try {
+        if (!(await sync.adoptLogin(table, id))) missed.add(id);
+      } catch (err) {
+        req.log.warn({ err }, "couldn't look up a login in Turso");
+      }
+    }
+  }
+  sessions.renew(req, reply);
+  viewers.renew(req, reply);
+});
+
 const chat = new KickChat({ ...config.pusher, log: { info: (m) => app.log.info(m), warn: (m) => app.log.warn(m) } });
 
 const bot = new KickBot(db, config.oauth, { info: (m) => app.log.info(m), warn: (m) => app.log.warn(m) });

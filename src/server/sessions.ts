@@ -4,7 +4,24 @@ import { config } from "./config.js";
 import type { Db } from "./db.js";
 
 export const SESSION_COOKIE = "clipq_session";
-const TTL_MS = 30 * 24 * 3600 * 1000;
+/** Logins last a year after the last visit: each day someone uses the site, it starts over. */
+const TTL_MS = 365 * 24 * 3600 * 1000;
+const RENEW_AFTER_MS = 24 * 3600 * 1000;
+
+function setLoginCookie(reply: FastifyReply, name: string, id: string, expires: number) {
+  reply.setCookie(name, id, { path: "/", httpOnly: true, sameSite: "lax", secure: config.secureCookies, expires: new Date(expires) });
+}
+
+/** Push a login's expiry a year out again, at most once a day (each renewal is a Turso write). */
+function renew(db: Db, table: "sessions" | "viewer_sessions", cookie: string, req: FastifyRequest, reply: FastifyReply) {
+  const id = req.cookies[cookie];
+  if (!id) return;
+  const row = db.prepare(`SELECT expires_at FROM ${table} WHERE id = ?`).get(id) as { expires_at: number } | undefined;
+  const now = Date.now();
+  if (!row || row.expires_at < now || row.expires_at - now > TTL_MS - RENEW_AFTER_MS) return;
+  db.prepare(`UPDATE ${table} SET expires_at = ? WHERE id = ?`).run(now + TTL_MS, id);
+  setLoginCookie(reply, cookie, id, now + TTL_MS);
+}
 
 /** A dashboard login: who it is, and which channel they're controlling right now. */
 export interface Session {
@@ -26,13 +43,11 @@ export class Sessions {
     this.db
       .prepare(`INSERT INTO sessions (id, channel_id, expires_at, user_id, username) VALUES (?, ?, ?, ?, ?)`)
       .run(id, channelId, expires, user.id, user.username.toLowerCase());
-    reply.setCookie(SESSION_COOKIE, id, {
-      path: "/",
-      httpOnly: true,
-      sameSite: "lax",
-      secure: config.secureCookies,
-      expires: new Date(expires),
-    });
+    setLoginCookie(reply, SESSION_COOKIE, id, expires);
+  }
+
+  renew(req: FastifyRequest, reply: FastifyReply) {
+    renew(this.db, "sessions", SESSION_COOKIE, req, reply);
   }
 
   get(req: FastifyRequest): Session | null {
@@ -79,7 +94,11 @@ export class ViewerSessions {
     const id = randomBytes(32).toString("base64url");
     const expires = Date.now() + TTL_MS;
     this.db.prepare(`INSERT INTO viewer_sessions (id, user_id, username, expires_at) VALUES (?, ?, ?, ?)`).run(id, viewer.id, viewer.username, expires);
-    reply.setCookie(VIEWER_COOKIE, id, { path: "/", httpOnly: true, sameSite: "lax", secure: config.secureCookies, expires: new Date(expires) });
+    setLoginCookie(reply, VIEWER_COOKIE, id, expires);
+  }
+
+  renew(req: FastifyRequest, reply: FastifyReply) {
+    renew(this.db, "viewer_sessions", VIEWER_COOKIE, req, reply);
   }
 
   viewer(req: FastifyRequest): Viewer | null {

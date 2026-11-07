@@ -20,10 +20,11 @@ const TABLES = {
   bans: ["id", "channel_id", "username", "user_id", "until", "created_at"],
   bot_tokens: ["id", "access_token", "refresh_token", "expires_at"],
   channel_editors: ["id", "channel_id", "username", "created_at"],
+  viewer_sessions: ["id", "user_id", "username", "expires_at"],
 } as const;
 type Table = keyof typeof TABLES;
 /** Parents first, so restored rows satisfy the local foreign keys. */
-const ORDER: Table[] = ["channels", "sessions", "items", "bans", "bot_tokens", "channel_editors"];
+const ORDER: Table[] = ["channels", "sessions", "items", "bans", "bot_tokens", "channel_editors", "viewer_sessions"];
 
 const REMOTE_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS channels (id INTEGER PRIMARY KEY, slug TEXT, display_name TEXT, chatroom_id INTEGER,
@@ -37,6 +38,7 @@ const REMOTE_SCHEMA = [
      created_at INTEGER)`,
   `CREATE TABLE IF NOT EXISTS bot_tokens (id INTEGER PRIMARY KEY, access_token TEXT, refresh_token TEXT, expires_at INTEGER)`,
   `CREATE TABLE IF NOT EXISTS channel_editors (id INTEGER PRIMARY KEY, channel_id INTEGER, username TEXT, created_at INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS viewer_sessions (id TEXT PRIMARY KEY, user_id INTEGER, username TEXT, expires_at INTEGER)`,
 ];
 
 /** Columns added to remote tables after they were first created. Each fails harmlessly once it's there. */
@@ -86,7 +88,7 @@ export class TursoSync {
       return;
     }
 
-    const rows: Record<Table, Record<string, unknown>[]> = { channels: [], sessions: [], items: [], bans: [], bot_tokens: [], channel_editors: [] };
+    const rows = Object.fromEntries(ORDER.map((t) => [t, []])) as unknown as Record<Table, Record<string, unknown>[]>;
     for (const t of ORDER) {
       const res = await this.remote.execute(`SELECT ${TABLES[t].join(", ")} FROM ${t}`);
       rows[t] = res.rows.map((r) => Object.fromEntries(TABLES[t].map((c) => [c, r[c] ?? null])));
@@ -108,6 +110,21 @@ export class TursoSync {
       this.db.prepare(`DELETE FROM sync_deletes`).run();
     })();
     this.log.info(`turso: restored ${rows.channels.length} channels, ${rows.items.length} items, ${rows.sessions.length} sessions, ${rows.bans.length} bans`);
+  }
+
+  /**
+   * Copy one login from Turso if it isn't here. During a deploy the old instance keeps serving for a
+   * while after this one restored; logins made there reach Turso but not this copy. True if found.
+   */
+  async adoptLogin(table: "sessions" | "viewer_sessions", id: string): Promise<boolean> {
+    const cols = TABLES[table];
+    const res = await this.remote.execute({ sql: `SELECT ${cols.join(", ")} FROM ${table} WHERE id = ?`, args: [id] });
+    const r = res.rows[0];
+    if (!r) return false;
+    if (table === "sessions" && !this.db.prepare(`SELECT 1 FROM channels WHERE id = ?`).get(r.channel_id)) return false;
+    const row = Object.fromEntries(cols.map((c) => [c, r[c] ?? null]));
+    this.db.prepare(`INSERT OR IGNORE INTO ${table} (${cols.join(", ")}) VALUES (${cols.map((c) => "@" + c).join(", ")})`).run(row);
+    return true;
   }
 
   /** Push changes every second until stop(). */

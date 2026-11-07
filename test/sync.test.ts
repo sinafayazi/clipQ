@@ -230,4 +230,28 @@ describe("schema migration", () => {
     const b = await boot();
     expect(b.queues.channel(7)?.slug).toBe("old");
   });
+
+  it("keeps song-page logins across a restart", async () => {
+    const a = await boot();
+    a.db.prepare(`INSERT INTO viewer_sessions (id, user_id, username, expires_at) VALUES ('v1', 5, 'bob', 9e12)`).run();
+    await a.sync.flush();
+    const b = await boot();
+    expect(b.db.prepare(`SELECT username FROM viewer_sessions WHERE id = 'v1'`).get()).toEqual({ username: "bob" });
+  });
+
+  it("adopts a login the old instance made after this one restored", async () => {
+    const old = await boot();
+    old.queues.upsertChannel({ id: 100, slug: "erph", displayName: "Erph", chatroomId: 555 }, 100);
+    await old.sync.flush();
+    const fresh = await boot();
+    old.db.prepare(`INSERT INTO sessions (id, channel_id, expires_at, user_id, username) VALUES ('late', 100, 9e12, 100, 'erph')`).run();
+    old.db.prepare(`INSERT INTO viewer_sessions (id, user_id, username, expires_at) VALUES ('vlate', 5, 'bob', 9e12)`).run();
+    await old.sync.flush();
+
+    expect(sessionIds(fresh.db)).toEqual([]);
+    expect(await fresh.sync.adoptLogin("sessions", "late")).toBe(true);
+    expect(await fresh.sync.adoptLogin("viewer_sessions", "vlate")).toBe(true);
+    expect(await fresh.sync.adoptLogin("sessions", "nope")).toBe(false);
+    expect(sessionIds(fresh.db)).toEqual(["late"]);
+  });
 });

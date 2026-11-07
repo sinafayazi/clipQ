@@ -150,6 +150,17 @@ const MIGRATIONS = [
   `
   ALTER TABLE items ADD COLUMN loudness REAL;
   `,
+  // Song-page logins go to Turso too, so a wake-up on Render's wiped disk doesn't log every viewer out.
+  `
+  ALTER TABLE viewer_sessions ADD COLUMN rev INTEGER NOT NULL DEFAULT 1;
+
+  ${revTriggers("viewer_sessions")}
+
+  CREATE TRIGGER viewer_sessions_tombstone AFTER DELETE ON viewer_sessions BEGIN
+    UPDATE sync_clock SET seq = seq + 1;
+    INSERT INTO sync_deletes VALUES ((SELECT seq FROM sync_clock), 'viewer_sessions', OLD.id);
+  END;
+  `,
 ];
 
 function revTriggers(table: string) {
