@@ -269,6 +269,28 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
     return hit ? "editor" : null;
   }
 
+  /**
+   * Remember who moderates a channel on Kick, from the badges on their chat messages: Kick has no way to
+   * ask. A message without the badge means they were demoted. Writes only when that changes.
+   */
+  noteChatRole(channelId: number, userId: number, username: string, isMod: boolean) {
+    const id = `${channelId}:${userId}`;
+    const known = this.db.prepare(`SELECT username FROM kick_mods WHERE id = ?`).get(id) as { username: string } | undefined;
+    if (isMod && known?.username !== username) {
+      this.db
+        .prepare(`INSERT INTO kick_mods (id, channel_id, user_id, username, seen_at) VALUES (?, ?, ?, ?, ?)
+                  ON CONFLICT (id) DO UPDATE SET username = excluded.username, seen_at = excluded.seen_at`)
+        .run(id, channelId, userId, username, this.now());
+    } else if (!isMod && known) {
+      this.db.prepare(`DELETE FROM kick_mods WHERE id = ?`).run(id);
+    }
+  }
+
+  /** Has this user been seen with the moderator badge in the channel's chat (and not without it since)? */
+  isKickMod(channelId: number, userId: number): boolean {
+    return !!this.db.prepare(`SELECT 1 FROM kick_mods WHERE id = ?`).get(`${channelId}:${userId}`);
+  }
+
   /** Every channel this user can control: their own first, then the ones they help with. */
   channelsFor(user: DashboardLogin): (ChannelInfo & { role: "owner" | "editor" })[] {
     const own = user.userId === null ? [] : (this.db.prepare(`SELECT * FROM channels WHERE owner_id = ?`).all(user.userId) as ChannelRow[]);

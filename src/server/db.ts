@@ -161,6 +161,25 @@ const MIGRATIONS = [
     INSERT INTO sync_deletes VALUES ((SELECT seq FROM sync_clock), 'viewer_sessions', OLD.id);
   END;
   `,
+  // Kick moderators, as seen by their badge in each channel's chat (Kick won't tell us otherwise).
+  // They may reorder songs on the song page. Dropped when they chat again without the badge.
+  `
+  CREATE TABLE kick_mods (
+    id          TEXT PRIMARY KEY,           -- "<channel_id>:<user_id>"
+    channel_id  INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    user_id     INTEGER NOT NULL,
+    username    TEXT NOT NULL,
+    seen_at     INTEGER NOT NULL,
+    rev         INTEGER NOT NULL DEFAULT 1
+  );
+
+  ${revTriggers("kick_mods")}
+
+  CREATE TRIGGER kick_mods_tombstone AFTER DELETE ON kick_mods BEGIN
+    UPDATE sync_clock SET seq = seq + 1;
+    INSERT INTO sync_deletes VALUES ((SELECT seq FROM sync_clock), 'kick_mods', OLD.id);
+  END;
+  `,
 ];
 
 function revTriggers(table: string) {

@@ -86,6 +86,8 @@ export function bridgeChat(
   async function onMessage(raw: ChatMessage) {
     const channel = queues.channelByChatroom(raw.chatroomId);
     if (!channel) return;
+    // Kick's own badge, before super users get theirs: lets Kick mods reorder songs on the song page.
+    queues.noteChatRole(channel.id, raw.sender.id, raw.sender.username, raw.sender.badges.includes("moderator"));
     // Super users act as the broadcaster everywhere, so every permission check lets them through.
     const msg = superUsers.has(raw.sender.username.toLowerCase())
       ? { ...raw, sender: { ...raw.sender, badges: [...raw.sender.badges, "broadcaster"] } }

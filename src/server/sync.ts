@@ -21,10 +21,11 @@ const TABLES = {
   bot_tokens: ["id", "access_token", "refresh_token", "expires_at"],
   channel_editors: ["id", "channel_id", "username", "created_at"],
   viewer_sessions: ["id", "user_id", "username", "expires_at"],
+  kick_mods: ["id", "channel_id", "user_id", "username", "seen_at"],
 } as const;
 type Table = keyof typeof TABLES;
 /** Parents first, so restored rows satisfy the local foreign keys. */
-const ORDER: Table[] = ["channels", "sessions", "items", "bans", "bot_tokens", "channel_editors", "viewer_sessions"];
+const ORDER: Table[] = ["channels", "sessions", "items", "bans", "bot_tokens", "channel_editors", "viewer_sessions", "kick_mods"];
 
 const REMOTE_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS channels (id INTEGER PRIMARY KEY, slug TEXT, display_name TEXT, chatroom_id INTEGER,
@@ -39,6 +40,7 @@ const REMOTE_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS bot_tokens (id INTEGER PRIMARY KEY, access_token TEXT, refresh_token TEXT, expires_at INTEGER)`,
   `CREATE TABLE IF NOT EXISTS channel_editors (id INTEGER PRIMARY KEY, channel_id INTEGER, username TEXT, created_at INTEGER)`,
   `CREATE TABLE IF NOT EXISTS viewer_sessions (id TEXT PRIMARY KEY, user_id INTEGER, username TEXT, expires_at INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS kick_mods (id TEXT PRIMARY KEY, channel_id INTEGER, user_id INTEGER, username TEXT, seen_at INTEGER)`,
 ];
 
 /** Columns added to remote tables after they were first created. Each fails harmlessly once it's there. */

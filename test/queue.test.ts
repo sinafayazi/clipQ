@@ -673,6 +673,20 @@ describe("dashboard access", () => {
   });
 });
 
+describe("Kick mods seen in chat", () => {
+  it("remembers the badge, renames, and forgets on a message without it", () => {
+    expect(q.isKickMod(CH, 7)).toBe(false);
+    q.noteChatRole(CH, 7, "Radin", false);
+    expect(q.isKickMod(CH, 7)).toBe(false);
+    q.noteChatRole(CH, 7, "Radin", true);
+    q.noteChatRole(CH, 7, "Radin", true);
+    expect(q.isKickMod(CH, 7)).toBe(true);
+    expect(q.isKickMod(CH + 1, 7)).toBe(false); // a mod here, not everywhere
+    q.noteChatRole(CH, 7, "Radin", false); // demoted
+    expect(q.isKickMod(CH, 7)).toBe(false);
+  });
+});
+
 describe("one plays at a time", () => {
   let s: QueueService;
   beforeEach(async () => {

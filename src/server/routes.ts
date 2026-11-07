@@ -324,12 +324,15 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
   });
 
   /**
-   * May whoever sent this reorder the channel's song list: its owner, a mod on its access list, or a
-   * clipQ super user. Either login counts: Kick on the song page, or the dashboard's.
+   * May whoever sent this reorder the channel's song list: its owner, a mod on its access list, a Kick
+   * mod of the channel (seen with the badge in its chat), or a clipQ super user. Either login counts:
+   * Kick on the song page, or the dashboard's.
    */
   const canManageSongs = (req: FastifyRequest, channelId: number) => {
     const may = (who: { userId: number | null; username: string | null }) =>
-      (who.username !== null && config.superUsers.has(who.username.toLowerCase())) || queues.canControl(channelId, who) !== null;
+      (who.username !== null && config.superUsers.has(who.username.toLowerCase())) ||
+      (who.userId !== null && queues.isKickMod(channelId, who.userId)) ||
+      queues.canControl(channelId, who) !== null;
     const viewer = viewers.viewer(req);
     const session = sessions.get(req);
     return (viewer !== null && may({ userId: viewer.id, username: viewer.username })) || (session !== null && may(session));

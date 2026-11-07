@@ -239,6 +239,19 @@ describe("schema migration", () => {
     expect(b.db.prepare(`SELECT username FROM viewer_sessions WHERE id = 'v1'`).get()).toEqual({ username: "bob" });
   });
 
+  it("keeps the Kick mods it has seen across a restart, and forgets demoted ones there too", async () => {
+    const a = await boot();
+    a.queues.upsertChannel({ id: 100, slug: "erph", displayName: "Erph", chatroomId: 555 }, 100);
+    a.queues.noteChatRole(100, 7, "Radin", true);
+    a.queues.noteChatRole(100, 8, "Mahsa", true);
+    await a.sync.flush();
+    a.queues.noteChatRole(100, 8, "Mahsa", false);
+    await a.sync.flush();
+    const b = await boot();
+    expect(b.queues.isKickMod(100, 7)).toBe(true);
+    expect(b.queues.isKickMod(100, 8)).toBe(false);
+  });
+
   it("adopts a login the old instance made after this one restored", async () => {
     const old = await boot();
     old.queues.upsertChannel({ id: 100, slug: "erph", displayName: "Erph", chatroomId: 555 }, 100);
