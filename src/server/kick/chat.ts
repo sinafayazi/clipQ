@@ -21,6 +21,8 @@ export interface ChatEvents {
   deleted: [{ chatroomId: number; messageId: string }];
   /** A user was banned or timed out. */
   banned: [{ chatroomId: number; userId: number }];
+  /** A viewer redeemed a channel point reward. */
+  redeemed: [{ chatroomId: number; title: string; userId: number; username: string; input: string }];
   status: [boolean];
 }
 
@@ -185,6 +187,20 @@ export class KickChat extends EventEmitter<ChatEvents> {
         if (typeof userId !== "number") return;
         if (!this.recentIds.add(`b:${data.id ?? userId}:${userId}`)) return;
         this.emit("banned", { chatroomId, userId });
+        return;
+      }
+      // Arrives on chatroom_<id> only, with no id of its own: two redemptions in a row look the same, so no dedupe.
+      // {"reward_title":"Hydrate","user_id":1,"channel_id":2,"username":"Name","user_input":"","reward_background_color":"#00a3ff"}
+      case "RewardRedeemedEvent":
+      case "App\\Events\\RewardRedeemedEvent": {
+        if (typeof data.reward_title !== "string" || typeof data.user_id !== "number") return;
+        this.emit("redeemed", {
+          chatroomId,
+          title: data.reward_title,
+          userId: data.user_id,
+          username: String(data.username ?? "someone"),
+          input: typeof data.user_input === "string" ? data.user_input : "",
+        });
         return;
       }
     }

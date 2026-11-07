@@ -62,6 +62,22 @@ export function bridgeChat(
     if (channel) queues.removeByUser(channel.id, userId);
   });
 
+  // The channel's "song to the top" reward: the redeemer's next waiting song jumps the line.
+  chat.on("redeemed", ({ chatroomId, title, userId, username }) => {
+    const channel = queues.channelByChatroom(chatroomId);
+    if (!channel) return;
+    const reward = queues.settings(channel.id).songs.priorityReward.trim().toLowerCase();
+    if (!reward || title.trim().toLowerCase() !== reward) return;
+    const song = queues.prioritizeSong(channel.id, userId);
+    log.info({ channel: channel.slug, user: username, reward: title, moved: song?.id ?? null }, "priority reward redeemed");
+    void bot.say(
+      channel.id,
+      song
+        ? `@${username} "${song.title ?? "your song"}" is next up.`
+        : `@${username} you have no song waiting. Request one with !sr first, then redeem it.`,
+    );
+  });
+
   // Dashboards show the chat connection, so push fresh state to all of them.
   chat.on("status", () => {
     for (const c of queues.channels()) queues.emit("changed", c.id);

@@ -147,9 +147,9 @@ function SongPage() {
         ) : (
           <ol className="song-list">
             {data.queue.map((s, i) => (
-              <li key={s.id} className={me?.manage ? "managed-song" : undefined}>
+              <li key={s.id} className={data.manage ? "managed-song" : undefined}>
                 <SongCard song={s} position={i + 1} mine={me?.queued.some((m) => m.id === s.id)} />
-                {me?.manage && (
+                {data.manage && (
                   <div className="song-move" role="group" aria-label={`Move ${s.title ?? "song"}`}>
                     {(
                       [

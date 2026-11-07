@@ -33,6 +33,7 @@ export const songSettingsSchema = z.object({
   requestCooldown: z.number().int().min(0).max(3600),
   access: z.array(z.enum(ACCESS_GROUPS)).min(1),
   player: z.enum(["dashboard", "obs"]),
+  priorityReward: z.string().trim().max(100),
 });
 
 export const settingsSchema = z.object({
@@ -658,7 +659,6 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
         username: viewer.username,
         queued: tl.queue.filter((q) => q.item.requestedBy.id === viewer.id).map((q) => pub(q.item, q.startsIn)),
         history,
-        manage: false,
       };
     }
     return {
@@ -667,6 +667,7 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
       current: tl.current ? pub(tl.current) : null,
       queue,
       me,
+      manage: false,
     };
   }
 
@@ -736,6 +737,16 @@ export class QueueService extends EventEmitter<{ changed: [channelId: number] }>
   /** Move a waiting song (only a song: the song page and `!sr move` must not touch clips). */
   moveSong(channelId: number, itemId: number, toIndex: number): boolean {
     return this.itemRow(channelId, itemId)?.queue === "songs" && this.move(channelId, itemId, toIndex);
+  }
+
+  /** A channel point redemption: the viewer's next waiting song goes to the top. Returns it, or null if they have none. */
+  prioritizeSong(channelId: number, userId: number): QueueItem | null {
+    const row = this.db
+      .prepare(`SELECT id FROM items WHERE channel_id = ? AND queue = 'songs' AND status = 'queued' AND requester_id = ? ORDER BY position, id LIMIT 1`)
+      .get(channelId, userId) as { id: number } | undefined;
+    if (!row) return null;
+    this.move(channelId, row.id, 0);
+    return this.item(channelId, row.id);
   }
 
   /** The id of the waiting song at a 1-based position in the list, as the song page numbers them. */

@@ -119,6 +119,21 @@ describe("KickChat", () => {
     expect(banned).toEqual([{ chatroomId: 42, userId: 7 }]);
   });
 
+  it("emits channel point redemptions, each one (Kick gives them no id)", () => {
+    const redeemed: unknown[] = [];
+    chat.on("redeemed", (e) => redeemed.push(e));
+    chat.join(42);
+    chat.start();
+    connect(sockets[0]!);
+    // As captured from Kick on 2026-11-07.
+    const event = { reward_title: "Hydrate", user_id: 75335045, channel_id: 74160146, username: "Siiinfa", user_input: "", reward_background_color: "#00a3ff" };
+    sockets[0]!.frame("RewardRedeemedEvent", event, "chatroom_42");
+    sockets[0]!.frame("RewardRedeemedEvent", event, "chatroom_42");
+    sockets[0]!.frame("RewardRedeemedEvent", { reward_title: "Hydrate" }, "chatroom_42"); // no user: ignored
+    const one = { chatroomId: 42, title: "Hydrate", userId: 75335045, username: "Siiinfa", input: "" };
+    expect(redeemed).toEqual([one, one]);
+  });
+
   it("answers pusher pings", () => {
     chat.start();
     connect(sockets[0]!);

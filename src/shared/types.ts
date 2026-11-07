@@ -74,6 +74,8 @@ export interface SongSettings {
   access: AccessGroup[];
   /** Where songs play: the dashboard's Songs tab, or the OBS browser-source page. */
   player: "dashboard" | "obs";
+  /** Kick channel point reward (its title, any case) that moves the redeemer's next song to the top. Empty = off. */
+  priorityReward: string;
 }
 
 export const DEFAULT_SONG_SETTINGS: SongSettings = {
@@ -85,6 +87,8 @@ export const DEFAULT_SONG_SETTINGS: SongSettings = {
   requestCooldown: 120,
   access: ["everyone"],
   player: "dashboard",
+  // For now; streamers can name their own reward in Settings (empty turns it off).
+  priorityReward: "ping",
 };
 
 export interface QueueSettings {
@@ -204,8 +208,13 @@ export interface PublicSongs {
   open: boolean;
   current: PublicSong | null;
   queue: PublicSong[];
-  /** Null when the viewer isn't logged in. `manage`: they may reorder the whole list (owner, a mod on the access list, a clipQ super user). */
-  me: { username: string; queued: PublicSong[]; history: PublicSong[]; manage: boolean } | null;
+  /** Null when the viewer isn't logged in. */
+  me: { username: string; queued: PublicSong[]; history: PublicSong[] } | null;
+  /**
+   * May reorder the whole list: the owner, a mod on the access list, or a clipQ super user, logged in
+   * either on this page (Kick) or to the dashboard.
+   */
+  manage: boolean;
 }
 
 /** A remote play/pause for one list's player. `seq` increases with every command. */

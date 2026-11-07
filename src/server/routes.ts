@@ -320,15 +320,20 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
   app.get<{ Params: { slug: string } }>("/api/s/:slug", async (req, reply) => {
     const c = songChannel(req.params.slug);
     if (!c) return reply.code(404).send({ error: "This channel doesn't use clipQ." });
-    const viewer = viewers.viewer(req);
-    const songs = queues.publicSongs(c.id, viewer);
-    if (songs.me && viewer) songs.me.manage = canManageSongs(c.id, viewer);
-    return songs;
+    return { ...queues.publicSongs(c.id, viewers.viewer(req)), manage: canManageSongs(req, c.id) };
   });
 
-  /** May this logged-in viewer reorder the channel's song list: its owner, a mod on its access list, or a clipQ super user. */
-  const canManageSongs = (channelId: number, viewer: { id: number; username: string }) =>
-    config.superUsers.has(viewer.username.toLowerCase()) || queues.canControl(channelId, { userId: viewer.id, username: viewer.username }) !== null;
+  /**
+   * May whoever sent this reorder the channel's song list: its owner, a mod on its access list, or a
+   * clipQ super user. Either login counts: Kick on the song page, or the dashboard's.
+   */
+  const canManageSongs = (req: FastifyRequest, channelId: number) => {
+    const may = (who: { userId: number | null; username: string | null }) =>
+      (who.username !== null && config.superUsers.has(who.username.toLowerCase())) || queues.canControl(channelId, who) !== null;
+    const viewer = viewers.viewer(req);
+    const session = sessions.get(req);
+    return (viewer !== null && may({ userId: viewer.id, username: viewer.username })) || (session !== null && may(session));
+  };
 
   /** A viewer action on a song page: needs the viewer to be logged in. */
   const viewerAction = <S extends z.ZodTypeAny>(
@@ -365,9 +370,14 @@ export function registerRoutes(app: FastifyInstance, { queues, chat, sessions, v
     queues.removeOwnSong(channelId, Number(p.id), viewer.id) ? { ok: true } : reply.code(404).send({ error: "That song isn't waiting any more." }),
   );
 
-  viewerAction("/api/s/:slug/songs/:id/move", z.object({ index: z.number().int().min(0) }), (channelId, viewer, b, p, reply) => {
-    if (!canManageSongs(channelId, viewer)) return reply.code(403).send({ error: "Only the streamer and their mods can reorder songs." });
-    return queues.moveSong(channelId, Number(p.id), b.index) ? { ok: true } : reply.code(404).send({ error: "That song isn't waiting any more." });
+  // Not a viewerAction: a dashboard login is enough, without logging in on the song page too.
+  app.post<{ Params: { slug: string; id: string } }>("/api/s/:slug/songs/:id/move", async (req, reply) => {
+    const c = songChannel(req.params.slug);
+    if (!c) return reply.code(404).send({ error: "not found" });
+    if (!canManageSongs(req, c.id)) return reply.code(403).send({ error: "Only the streamer and their mods can reorder songs." });
+    const b = z.object({ index: z.number().int().min(0) }).safeParse(req.body ?? undefined);
+    if (!b.success) return reply.code(400).send({ error: "bad request" });
+    return queues.moveSong(c.id, Number(req.params.id), b.data.index) ? { ok: true } : reply.code(404).send({ error: "That song isn't waiting any more." });
   });
 
   // ---- Overlays: secret OBS browser sources (chat + emote streak) ------------------------------

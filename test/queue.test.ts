@@ -456,6 +456,17 @@ describe("song requests", () => {
     s.updateSettings(CH, { open: true, songs: { ...s.settings(CH).songs, open: true, requestCooldown: 0 } });
   });
 
+  it("sends a viewer's next waiting song to the top for the channel point reward", async () => {
+    s.updateSettings(CH, { songs: { ...s.settings(CH).songs, perUserLimit: 0 } });
+    for (const [t, who] of [["a", alice], ["b", alice], ["c", bob], ["d", alice], ["e", bob]] as const) await req(t, who);
+    // a plays; waiting: b(alice) c(bob) d(alice) e(bob)
+    expect(s.prioritizeSong(CH, bob.id)?.clipId).toBe("cxxxxxxxxxx");
+    expect(titles()).toEqual(["cxxxxxxxxxx", "bxxxxxxxxxx", "dxxxxxxxxxx", "exxxxxxxxxx"]);
+    expect(s.prioritizeSong(CH, alice.id)?.clipId).toBe("bxxxxxxxxxx"); // her next one, not her later one
+    expect(titles()[0]).toBe("bxxxxxxxxxx");
+    expect(s.prioritizeSong(CH, 999)).toBeNull();
+  });
+
   it("moves a waiting song by its place in the list, and never a clip", async () => {
     s.updateSettings(CH, { songs: { ...s.settings(CH).songs, perUserLimit: 0 } });
     for (const t of ["a", "b", "c", "d"]) await req(t); // a plays, b c d wait
@@ -492,7 +503,7 @@ describe("song requests", () => {
     const fresh = new QueueService(openDb(":memory:"), resolver);
     fresh.upsertChannel({ id: 1, slug: "a", displayName: "A", chatroomId: 1 }, 1);
     expect(fresh.settings(1).songs).toEqual({
-      open: false, maxSize: 50, perUserLimit: 2, maxDuration: 600, voteSkip: 10, requestCooldown: 120, access: ["everyone"], player: "dashboard",
+      open: false, maxSize: 50, perUserLimit: 2, maxDuration: 600, voteSkip: 10, requestCooldown: 120, access: ["everyone"], player: "dashboard", priorityReward: "ping",
     });
     // One volume and one normalize switch for clips and songs.
     expect(fresh.settings(1)).toMatchObject({ volume: 60, normalize: true });

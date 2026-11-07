@@ -285,7 +285,41 @@ function SongSettingsSection({ state, run }: { state: QueueState; run: Run }) {
           </button>
         ))}
       </div>
+
+      <RewardField value={s.priorityReward} onSave={(priorityReward) => save({ priorityReward })} />
     </section>
+  );
+}
+
+/** The channel point reward that sends the redeemer's next song to the top. Saves on Enter or when you leave it. */
+function RewardField({ value, onSave }: { value: string; onSave: (title: string) => void }) {
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+  const save = () => {
+    if (text.trim() !== value) onSave(text.trim());
+  };
+  return (
+    <div className="field">
+      <label htmlFor="song-priority-reward">Channel point reward: song to the top</label>
+      <input
+        id="song-priority-reward"
+        value={text}
+        maxLength={100}
+        placeholder="Reward name, exactly as on Kick"
+        onChange={(e) => setText(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            save();
+          }
+        }}
+        autoComplete="off"
+      />
+      <p className="settings-hint">
+        When a viewer redeems this reward on Kick, their next waiting song moves to the top. Leave empty to turn it off.
+      </p>
+    </div>
   );
 }
 
