@@ -505,7 +505,7 @@ describe("song requests", () => {
     expect(fresh.settings(1).songs).toEqual({
       open: false, maxSize: 50, perUserLimit: 2, maxDuration: 600, voteSkip: 10, requestCooldown: 120, access: ["everyone"], player: "dashboard",
     });
-    expect(fresh.settings(1).rewards).toEqual({ songToTop: "ping", timeout: "Timeout 10 min", untimeout: "UnTimeout", timeoutMinutes: 10 });
+    expect(fresh.settings(1).rewards).toEqual({ songToTop: "TopMySong", timeout: "Timeout 10 min", untimeout: "UnTimeout", timeoutMinutes: 10 });
     // One volume and one normalize switch for clips and songs.
     expect(fresh.settings(1)).toMatchObject({ volume: 60, normalize: true });
   });
@@ -529,6 +529,9 @@ describe("song requests", () => {
     // Once saved in the new place, the new place wins.
     fresh.updateSettings(1, { rewards: { ...fresh.settings(1).rewards, songToTop: "" } });
     expect(fresh.settings(1).rewards.songToTop).toBe("");
+    // The old default was saved along with any song setting: it gets the new default.
+    db.prepare(`UPDATE channels SET settings = ? WHERE id = 1`).run(JSON.stringify({ songs: { priorityReward: "ping" } }));
+    expect(fresh.settings(1).rewards.songToTop).toBe("TopMySong");
   });
 
   it("the first song starts right away; the rest wait in order; clips are untouched", async () => {

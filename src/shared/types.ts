@@ -90,7 +90,7 @@ export interface RewardSettings {
 
 export const DEFAULT_REWARD_SETTINGS: RewardSettings = {
   // For now; streamers can name their own reward in Settings (empty turns it off).
-  songToTop: "ping",
+  songToTop: "TopMySong",
   timeout: "Timeout 10 min",
   untimeout: "UnTimeout",
   timeoutMinutes: 10,

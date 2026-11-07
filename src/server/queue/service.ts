@@ -985,9 +985,10 @@ function readSettings(json: string): QueueSettings {
     songs: { ...DEFAULT_SETTINGS.songs, ...saved.songs },
     rewards: { ...DEFAULT_SETTINGS.rewards, ...saved.rewards },
   };
-  // The song-to-the-top reward used to live with the song settings.
+  // The song-to-the-top reward used to live with the song settings. Its old default ("ping") was
+  // saved with any song setting, so it means "never chosen": those channels get the new default.
   const oldReward = (saved.songs as { priorityReward?: unknown } | undefined)?.priorityReward;
-  if (saved.rewards === undefined && typeof oldReward === "string") merged.rewards.songToTop = oldReward;
+  if (saved.rewards === undefined && typeof oldReward === "string" && oldReward !== "ping") merged.rewards.songToTop = oldReward;
   // Songs used to have their own volume and normalize switch; now one of each covers clips and songs.
   const oldSongs = saved.songs as { volume?: number; normalize?: boolean } | undefined;
   if (saved.volume === undefined && oldSongs?.volume !== undefined) merged.volume = oldSongs.volume;
