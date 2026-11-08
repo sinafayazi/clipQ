@@ -69,6 +69,21 @@ describe("timeout reward", () => {
     expect(calls).toEqual([]);
   });
 
+  it("adds up when redeemed again on someone already timed out", async () => {
+    await redeem("Timeout", "troll");
+    expect(await redeem("Timeout", "troll")).toBe("@troll's timeout is 10 minutes longer: 20 minutes left (redeemed by @fan).");
+    expect(calls).toEqual(["timeout 5 10", "untimeout 5", "timeout 5 20"]);
+    rewards.banned(CH, 5, Date.now() + 10079 * 60_000);
+    await redeem("Timeout", "troll");
+    expect(calls.at(-1)).toBe("timeout 5 10080"); // Kick's 7-day limit
+  });
+
+  it("leaves a permanent ban alone", async () => {
+    rewards.banned(CH, 5, null);
+    expect(await redeem("Timeout", "troll")).toBe("@fan @troll is already banned.");
+    expect(calls).toEqual([]);
+  });
+
   it("says why when Kick refuses", async () => {
     kickError = "clipQ can't time people out yet: the streamer has to log in to clipQ again and allow moderation.";
     expect(await redeem("Timeout", "troll")).toBe(`@fan ${kickError}`);
@@ -97,6 +112,16 @@ describe("untimeout reward", () => {
     await redeem("Timeout", "troll");
     await redeem("Untimeout", "troll");
     expect(calls).toEqual(["timeout 5 10", "untimeout 5"]);
+  });
+
+  it("takes off the reward's minutes from a longer timeout, and lifts the rest", async () => {
+    await redeem("Timeout", "troll");
+    await redeem("Timeout", "troll"); // 20 minutes
+    calls = [];
+    expect(await redeem("Untimeout", "troll")).toBe("@troll's timeout is 10 minutes shorter: 10 minutes left (redeemed by @fan).");
+    expect(calls).toEqual(["untimeout 5", "timeout 5 10"]);
+    expect(await redeem("Untimeout", "troll")).toBe("@troll's timeout is lifted (redeemed by @fan).");
+    expect(await redeem("Untimeout", "troll")).toBe("@fan @troll isn't timed out.");
   });
 
   it("never lifts a permanent ban, or a ban it can't tell is a timeout", async () => {

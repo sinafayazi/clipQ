@@ -336,7 +336,7 @@ function ChannelPointsSection({ settings, run }: { settings: RewardSettings; run
       <TextField
         id="reward-timeout"
         label="Time someone out"
-        hint="The viewer types a name when they redeem it, and that viewer is timed out on Kick. Mods and you can't be. Turn on “user input” for this reward on Kick."
+        hint="The viewer types a name when they redeem it, and that viewer is timed out on Kick. Redeemed again, the time adds up. Mods and you can't be. Turn on “user input” for this reward on Kick."
         value={settings.timeout}
         onSave={(timeout) => save({ timeout })}
       />
@@ -352,8 +352,8 @@ function ChannelPointsSection({ settings, run }: { settings: RewardSettings; run
       </div>
       <TextField
         id="reward-untimeout"
-        label="Lift a timeout"
-        hint="The viewer types a name, and that viewer's timeout ends. It never lifts a permanent ban. Turn on “user input” for this reward on Kick."
+        label="Shorten a timeout"
+        hint="The viewer types a name, and that viewer's timeout gets shorter by the minutes above (it ends when less is left). It never lifts a permanent ban. Turn on “user input” for this reward on Kick."
         value={settings.untimeout}
         onSave={(untimeout) => save({ untimeout })}
       />
