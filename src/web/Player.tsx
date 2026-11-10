@@ -25,7 +25,10 @@ interface Props {
   hidden?: boolean;
 }
 
-/** One embed per provider. Keyed by item id by the caller, so every clip gets a fresh player. */
+/**
+ * One embed per provider. Clips are keyed by item id by the caller, so every clip gets a fresh player;
+ * songs aren't, so the YouTube player stays and loads the next song.
+ */
 export function Player({ item, onEnded, volume, normalize = false, onPlaying, blocked, autoplay = true, control, hidden = false }: Props) {
   const p = { onPlaying, blocked, autoplay, control, hidden };
   const auto = autoplay ? "1" : "0";
@@ -536,6 +539,25 @@ function YouTube({
     player.setVolume(value);
   };
 
+  /** The video this component should show, and the one the player has: they differ until it loads the new one. */
+  const want = useLatest({ id, start, autoplay });
+  const loaded = useRef<string | null>(null);
+
+  /** Loads the wanted video into the running player (for a caller that reuses it for the next song). */
+  const load = (player: any) => {
+    const w = want.current;
+    const key = `${w.id}@${w.start}`;
+    if (loaded.current === key) return;
+    loaded.current = key;
+    const video = { videoId: w.id, startSeconds: w.start };
+    if (w.autoplay) player.loadVideoById(video);
+    else player.cueVideoById(video);
+    apply(player);
+  };
+
+  // One player for this component's life. A caller that keeps it mounted (the songs player) gets the
+  // next song loaded into the same player: a new player can't start in a window Chrome counts as
+  // hidden (a fullscreen game over it, on Windows), the one that was just playing can.
   useEffect(() => {
     let player: any = null;
     let cancelled = false;
@@ -543,13 +565,16 @@ function YouTube({
       if (cancelled || !host.current) return;
       const el = document.createElement("div");
       host.current.replaceChildren(el);
+      const first = want.current;
+      loaded.current = `${first.id}@${first.start}`;
       player = new YT.Player(el, {
-        videoId: id,
-        playerVars: { autoplay: autoplay ? 1 : 0, start, rel: 0, playsinline: 1 },
+        videoId: first.id,
+        playerVars: { autoplay: first.autoplay ? 1 : 0, start: first.start, rel: 0, playsinline: 1 },
         events: {
           onReady: () => {
             ready.current = player;
             apply(player);
+            load(player); // the song changed while the player was starting
           },
           onStateChange: (e: { data: number }) => {
             if (e.data === YT.PlayerState.PLAYING) {
@@ -572,6 +597,10 @@ function YouTube({
       player?.destroy?.();
       playing.current?.(false, "gone");
     };
+  }, []);
+
+  useEffect(() => {
+    if (ready.current) load(ready.current);
   }, [id, start]);
 
   useControl(control, (action) => (action === "pause" ? ready.current?.pauseVideo?.() : ready.current?.playVideo?.()));

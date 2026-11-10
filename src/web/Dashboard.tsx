@@ -443,8 +443,8 @@ function SongsView({
               <CopyLink url={obsUrl} />
             </div>
           ) : current ? (
+            // Not keyed by song: the same YouTube player plays the next one (see YouTube in Player).
             <Player
-              key={current.id}
               item={current}
               onEnded={onEnded}
               volume={state.settings.volume}

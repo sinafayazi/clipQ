@@ -75,7 +75,7 @@ function ObsPlayer() {
   if (!current) return null;
   return (
     <div className="player obs-player">
-      <Player key={current.id} item={current} onEnded={onEnded} volume={state?.volume ?? 60} normalize={state?.normalize ?? true}
+      <Player item={current} onEnded={onEnded} volume={state?.volume ?? 60} normalize={state?.normalize ?? true}
         onPlaying={report}
         blocked={state?.clipPlaying}
         autoplay={start.autoplay}
